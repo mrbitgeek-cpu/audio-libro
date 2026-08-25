@@ -51,13 +51,24 @@ export function useSpeech(sentences: Sentence[], onIndex: (i: number) => void) {
   sentencesRef.current = sentences;
   onIndexRef.current = onIndex;
 
-  /* voces disponibles (se cargan en diferido en muchos navegadores) */
+  /* voces disponibles: Safari/iOS las carga en diferido, a veces solo tras un
+     gesto del usuario, así que reintentamos durante unos segundos */
   useEffect(() => {
     if (typeof speechSynthesis === "undefined") return;
-    const load = () => setVoices(speechSynthesis.getVoices());
-    load();
+    const load = () => {
+      const v = speechSynthesis.getVoices();
+      if (v.length) setVoices(v);
+      return v.length > 0;
+    };
+    if (load()) return;
     speechSynthesis.addEventListener("voiceschanged", load);
+    let tries = 0;
+    const iv = window.setInterval(() => {
+      tries++;
+      if (load() || tries > 20) window.clearInterval(iv);
+    }, 400);
     return () => {
+      window.clearInterval(iv);
       speechSynthesis.removeEventListener("voiceschanged", load);
       speechSynthesis.cancel();
     };
@@ -120,7 +131,8 @@ export function useSpeech(sentences: Sentence[], onIndex: (i: number) => void) {
       };
 
       setStatus("playing");
-      step(from);
+      /* iOS ignora el speak() si llega en el mismo tick que el cancel() */
+      window.setTimeout(() => step(from), 90);
     },
     [voiceURI, rate, pitch]
   );
@@ -150,6 +162,29 @@ export function useSpeech(sentences: Sentence[], onIndex: (i: number) => void) {
     if (typeof speechSynthesis !== "undefined") speechSynthesis.cancel();
     setStatus("idle");
   }, []);
+
+  /* Safari en iPhone corta el audio a los ~15 s: un ciclo pause/resume cada
+     10 s lo mantiene vivo; y si la pestaña vuelve al primer plano, reanudamos */
+  useEffect(() => {
+    if (typeof speechSynthesis === "undefined" || status !== "playing") return;
+    const iv = window.setInterval(() => {
+      const s = speechSynthesis;
+      if (s.speaking && !s.paused) {
+        s.pause();
+        s.resume();
+      }
+    }, 10_000);
+    const onVis = () => {
+      if (document.visibilityState === "visible" && speechSynthesis.paused) {
+        speechSynthesis.resume();
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.clearInterval(iv);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [status]);
 
   const toggle = useCallback(() => {
     if (status === "playing") pause();
