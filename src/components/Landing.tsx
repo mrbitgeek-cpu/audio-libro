@@ -6,6 +6,7 @@ import {
   IcEpub,
   IcFilePdf,
   IcLogo,
+  IcMic,
   IcPen,
   IcShield,
   IcSparkle,
@@ -17,6 +18,7 @@ interface Props {
   onFiles: (files: FileList | File[]) => void;
   onDemo: () => void;
   onPaste: () => void;
+  onOpenStudio: () => void;
 }
 
 const MARQUEE = [
@@ -25,11 +27,12 @@ const MARQUEE = [
   "olvida cabeceras repetidas",
   "pasa la página sola",
   "lee lo que pegues a mano",
+  "estudio de voz con efectos",
   "elige voz y velocidad",
   "todo ocurre en tu navegador",
 ];
 
-export default function Landing({ onFiles, onDemo, onPaste }: Props) {
+export default function Landing({ onFiles, onDemo, onPaste, onOpenStudio }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState(false);
 
@@ -226,6 +229,22 @@ export default function Landing({ onFiles, onDemo, onPaste }: Props) {
               </span>
             </span>
             <IcArrowR className="h-5 w-5 shrink-0 text-teal-600 transition-transform group-hover:translate-x-1" />
+          </button>
+
+          <button
+            onClick={onOpenStudio}
+            className="group mt-3 flex w-full items-center justify-between rounded-lg border border-line bg-card/70 px-5 py-3.5 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-[#e06a55] hover:bg-[#e06a55]/10"
+          >
+            <span className="flex items-center gap-3">
+              <IcMic className="h-5 w-5 text-[#c9553f] transition-transform group-hover:scale-110" />
+              <span>
+                <span className="block font-display text-[14px] font-bold">Estudio de voz</span>
+                <span className="block font-body text-[12.5px] italic text-ink-soft">
+                  Graba tu narración y escúchala con eco, catedral, ardilla, gigante, robot…
+                </span>
+              </span>
+            </span>
+            <IcArrowR className="h-5 w-5 shrink-0 text-[#c9553f] transition-transform group-hover:translate-x-1" />
           </button>
         </div>
       </main>

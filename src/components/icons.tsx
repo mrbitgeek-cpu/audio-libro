@@ -202,6 +202,20 @@ export const IcArrowR = (p: P) => (
   </svg>
 );
 
+export const IcMic = (p: P) => (
+  <svg {...base} {...p}>
+    <rect x="9.2" y="3.2" width="5.6" height="10.6" rx="2.8" />
+    <path d="M5.5 11.8a6.5 6.5 0 0 0 13 0M12 18.3v2.7m-3 0h6" />
+  </svg>
+);
+
+export const IcDownload = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M12 4v11m0 0 4-4m-4 4-4-4" />
+    <path d="M4 15.5v3c0 .8.7 1.5 1.5 1.5h13c.8 0 1.5-.7 1.5-1.5v-3" />
+  </svg>
+);
+
 export const IcPen = (p: P) => (
   <svg {...base} {...p}>
     <path d="m14.5 5.5 4 4L8 20l-4.6 1.1L4.5 16 15 5.5Z" />

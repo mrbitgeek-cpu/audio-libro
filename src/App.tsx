@@ -9,8 +9,9 @@ import Sidebar from "./components/Sidebar";
 import Reader from "./components/Reader";
 import PlayerBar from "./components/PlayerBar";
 import PasteModal from "./components/PasteModal";
+import Studio from "./components/Studio";
 import { Switch } from "./components/ui";
-import { IcAlert, IcEye, IcMenu, IcPen, IcPlus, IcX } from "./components/icons";
+import { IcAlert, IcEye, IcMenu, IcMic, IcPen, IcPlus, IcX } from "./components/icons";
 
 const EMPTY_SENTENCES: never[] = [];
 
@@ -35,7 +36,10 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [pasteOpen, setPasteOpen] = useState(false);
+  const [view, setView] = useState<"read" | "studio">("read");
   const fileRef = useRef<HTMLInputElement>(null);
+  const viewRef = useRef(view);
+  viewRef.current = view;
 
   /* persistencia ligera */
   useEffect(() => {
@@ -196,6 +200,8 @@ export default function App() {
       ) {
         return;
       }
+      /* el estudio gestiona su propio teclado */
+      if (viewRef.current === "studio") return;
       if (!builtRef.current) return;
       if (e.code === "Space") {
         e.preventDefault();
@@ -227,9 +233,17 @@ export default function App() {
 
   /* ---------- pantallas ---------- */
   if (!active || !built) {
+    if (view === "studio") {
+      return <Studio onBack={() => setView("read")} />;
+    }
     return (
       <>
-        <Landing onFiles={addFiles} onDemo={addDemo} onPaste={() => setPasteOpen(true)} />
+        <Landing
+          onFiles={addFiles}
+          onDemo={addDemo}
+          onPaste={() => setPasteOpen(true)}
+          onOpenStudio={() => setView("studio")}
+        />
         <ParsingOverlay parsing={parsing} />
         <ErrorToast error={error} onClose={() => setError(null)} />
         <PasteModal open={pasteOpen} onClose={() => setPasteOpen(false)} onSubmit={addPaste} />
@@ -295,8 +309,12 @@ export default function App() {
       />
 
       <main className="flex min-w-0 flex-1 flex-col">
-        {/* barra superior */}
-        <header className="z-10 flex items-center gap-3 border-b border-line bg-card/80 px-4 py-3 backdrop-blur md:px-6">
+        {view === "studio" ? (
+          <Studio onBack={() => setView("read")} />
+        ) : (
+          <>
+            {/* barra superior */}
+            <header className="z-10 flex items-center gap-3 border-b border-line bg-card/80 px-4 py-3 backdrop-blur md:px-6">
           <button
             onClick={() => setMenuOpen(true)}
             className="rounded-md border border-line p-2 text-ink-soft transition-colors hover:border-teal-500 hover:text-teal-600 lg:hidden"
@@ -335,6 +353,14 @@ export default function App() {
             <span className="hidden sm:inline">Texto</span>
           </button>
           <button
+            onClick={() => setView("studio")}
+            className="flex items-center gap-1.5 rounded-full border border-line bg-paper px-3 py-1.5 font-display text-[12px] font-bold text-pine-800 transition-all hover:border-[#e06a55] hover:text-[#c9553f] active:scale-95"
+            title="Estudio de voz: graba y aplica efectos"
+          >
+            <IcMic className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Estudio</span>
+          </button>
+          <button
             onClick={() => fileRef.current?.click()}
             className="flex items-center gap-1.5 rounded-full bg-teal-600 px-3.5 py-1.5 font-display text-[12px] font-bold text-fern shadow transition-all hover:bg-teal-500 active:scale-95"
             title="Añadir otro libro"
@@ -355,7 +381,9 @@ export default function App() {
           follow={follow}
         />
 
-        <PlayerBar speech={speech} built={built} pageIdx={pageIdx} onToggle={handleToggle} />
+            <PlayerBar speech={speech} built={built} pageIdx={pageIdx} onToggle={handleToggle} />
+          </>
+        )}
       </main>
 
       <ParsingOverlay parsing={parsing} />
