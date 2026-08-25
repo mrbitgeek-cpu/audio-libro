@@ -1,11 +1,11 @@
-# Publica Vozalta en GitHub Pages cada vez que hay un push a main.
+# Publica Vozalta en GitHub Pages en cada push a main o master.
 # IMPORTANTE: compila con --base=./ para que las rutas de los assets
 # sean relativas y funcionen bajo https://USUARIO.github.io/REPO/
 name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
   workflow_dispatch:
 
 permissions:
@@ -15,7 +15,7 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -27,14 +27,15 @@ jobs:
       - name: Preparar Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Instalar dependencias
-        run: npm ci
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
       - name: Compilar con rutas relativas (clave para GitHub Pages)
-        run: npm run build -- --base=./
+        run: npx vite build --base=./
 
       - name: Preparar GitHub Pages
         uses: actions/configure-pages@v5
@@ -44,13 +45,6 @@ jobs:
         with:
           path: dist
 
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
       - name: Publicar
         id: deployment
         uses: actions/deploy-pages@v4
