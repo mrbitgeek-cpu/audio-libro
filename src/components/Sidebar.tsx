@@ -8,6 +8,7 @@ import {
   IcHash,
   IcLayers,
   IcLogo,
+  IcPen,
   IcPlus,
   IcTrash,
   IcVoice,
@@ -23,6 +24,7 @@ interface Props {
   onSelect: (id: string) => void;
   onRemove: (id: string) => void;
   onAdd: () => void;
+  onPaste: () => void;
   speech: SpeechEngine;
 }
 
@@ -46,6 +48,7 @@ export default function Sidebar({
   onSelect,
   onRemove,
   onAdd,
+  onPaste,
   speech,
 }: Props) {
   const esVoices = speech.voices.filter((v) => v.lang.toLowerCase().startsWith("es"));
@@ -71,14 +74,24 @@ export default function Sidebar({
         <div className="px-5 pt-5">
           <div className="flex items-center justify-between">
             <SectionTitle>Biblioteca</SectionTitle>
-            <button
-              onClick={onAdd}
-              className="group flex items-center gap-1 rounded-md bg-pine-800 px-2 py-1 font-display text-[11px] font-semibold text-moss transition-all hover:bg-teal-600 hover:text-fern active:scale-95"
-              title="Añadir PDF o EPUB"
-            >
-              <IcPlus className="h-3.5 w-3.5 transition-transform group-hover:rotate-90" />
-              Añadir
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={onPaste}
+                className="group flex items-center gap-1 rounded-md bg-pine-800 px-2 py-1 font-display text-[11px] font-semibold text-moss transition-all hover:bg-gold-500 hover:text-pine-950 active:scale-95"
+                title="Pegar texto para leerlo en voz alta"
+              >
+                <IcPen className="h-3.5 w-3.5 transition-transform group-hover:-rotate-12" />
+                Pegar
+              </button>
+              <button
+                onClick={onAdd}
+                className="group flex items-center gap-1 rounded-md bg-pine-800 px-2 py-1 font-display text-[11px] font-semibold text-moss transition-all hover:bg-teal-600 hover:text-fern active:scale-95"
+                title="Añadir PDF o EPUB"
+              >
+                <IcPlus className="h-3.5 w-3.5 transition-transform group-hover:rotate-90" />
+                Añadir
+              </button>
+            </div>
           </div>
 
           <ul className="mt-3 space-y-1.5">
@@ -134,9 +147,11 @@ export default function Sidebar({
             <SectionTitle>Limpieza del texto</SectionTitle>
           </div>
 
-          {activeBook?.source === "epub" ? (
+          {activeBook?.source === "epub" || activeBook?.source === "paste" ? (
             <p className="mt-3 rounded-lg bg-pine-900 px-3 py-2.5 text-[12px] leading-relaxed text-moss">
-              Este EPUB ya se limpió al importarlo: notas, índices y marcadores de página quedaron fuera.
+              {activeBook?.source === "paste"
+                ? "Texto pegado a mano: se paginó tal cual, sin limpieza que aplicar."
+                : "Este EPUB ya se limpió al importarlo: notas, índices y marcadores de página quedaron fuera."}
             </p>
           ) : (
             <>

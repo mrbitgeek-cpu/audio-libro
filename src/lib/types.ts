@@ -46,10 +46,10 @@ export interface Book {
   id: string;
   title: string;
   author?: string;
-  source: "pdf" | "epub" | "demo";
+  source: "pdf" | "epub" | "demo" | "paste";
   /** PDF y demo pasan por la cadena de limpieza. */
   raw: RawLine[][] | null;
-  /** EPUB llega ya estructurado en párrafos. */
+  /** EPUB y texto pegado llegan ya estructurados en párrafos. */
   pages: PageBlock[] | null;
   language?: string;
 }

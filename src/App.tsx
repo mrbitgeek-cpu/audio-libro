@@ -2,13 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Book, FilterOpts } from "./lib/types";
 import { buildBook } from "./lib/book";
 import { makeDemoBook } from "./lib/demo";
+import { makePasteBook } from "./lib/paste";
 import { useSpeech } from "./hooks/useSpeech";
 import Landing from "./components/Landing";
 import Sidebar from "./components/Sidebar";
 import Reader from "./components/Reader";
 import PlayerBar from "./components/PlayerBar";
+import PasteModal from "./components/PasteModal";
 import { Switch } from "./components/ui";
-import { IcAlert, IcEye, IcMenu, IcPlus, IcX } from "./components/icons";
+import { IcAlert, IcEye, IcMenu, IcPen, IcPlus, IcX } from "./components/icons";
 
 const EMPTY_SENTENCES: never[] = [];
 
@@ -32,6 +34,7 @@ export default function App() {
   const [parsing, setParsing] = useState<{ name: string; progress: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [pasteOpen, setPasteOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   /* persistencia ligera */
@@ -114,6 +117,17 @@ export default function App() {
     const demo = makeDemoBook();
     setBooks((bs) => [...bs, demo]);
     setActiveId(demo.id);
+  }, []);
+
+  const addPaste = useCallback((title: string, text: string) => {
+    try {
+      const book = makePasteBook(title, text);
+      setBooks((bs) => [...bs, book]);
+      setActiveId(book.id);
+      setPasteOpen(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo leer ese texto.");
+    }
   }, []);
 
   const removeBook = useCallback(
@@ -215,9 +229,10 @@ export default function App() {
   if (!active || !built) {
     return (
       <>
-        <Landing onFiles={addFiles} onDemo={addDemo} />
+        <Landing onFiles={addFiles} onDemo={addDemo} onPaste={() => setPasteOpen(true)} />
         <ParsingOverlay parsing={parsing} />
         <ErrorToast error={error} onClose={() => setError(null)} />
+        <PasteModal open={pasteOpen} onClose={() => setPasteOpen(false)} onSubmit={addPaste} />
       </>
     );
   }
@@ -235,6 +250,7 @@ export default function App() {
           onSelect={setActiveId}
           onRemove={removeBook}
           onAdd={() => fileRef.current?.click()}
+          onPaste={() => setPasteOpen(true)}
           speech={speech}
         />
       </aside>
@@ -256,6 +272,10 @@ export default function App() {
               }}
               onRemove={removeBook}
               onAdd={() => fileRef.current?.click()}
+              onPaste={() => {
+                setPasteOpen(true);
+                setMenuOpen(false);
+              }}
               speech={speech}
             />
           </div>
@@ -307,6 +327,14 @@ export default function App() {
           </span>
 
           <button
+            onClick={() => setPasteOpen(true)}
+            className="flex items-center gap-1.5 rounded-full border border-line bg-paper px-3 py-1.5 font-display text-[12px] font-bold text-pine-800 transition-all hover:border-teal-500 hover:text-teal-600 active:scale-95"
+            title="Pegar texto para leerlo en voz alta"
+          >
+            <IcPen className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Texto</span>
+          </button>
+          <button
             onClick={() => fileRef.current?.click()}
             className="flex items-center gap-1.5 rounded-full bg-teal-600 px-3.5 py-1.5 font-display text-[12px] font-bold text-fern shadow transition-all hover:bg-teal-500 active:scale-95"
             title="Añadir otro libro"
@@ -332,6 +360,7 @@ export default function App() {
 
       <ParsingOverlay parsing={parsing} />
       <ErrorToast error={error} onClose={() => setError(null)} />
+      <PasteModal open={pasteOpen} onClose={() => setPasteOpen(false)} onSubmit={addPaste} />
     </div>
   );
 }

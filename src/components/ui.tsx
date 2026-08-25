@@ -37,13 +37,19 @@ export function SectionTitle({ children }: { children: ReactNode }) {
   );
 }
 
-export function SourceBadge({ source }: { source: "pdf" | "epub" | "demo" }) {
+export function SourceBadge({
+  source,
+}: {
+  source: "pdf" | "epub" | "demo" | "paste";
+}) {
   const cls =
     source === "pdf"
       ? "bg-[#3b2b20] text-[#e8b184]"
       : source === "epub"
         ? "bg-[#1e3328] text-[#7fc7a8]"
-        : "bg-[#3a301d] text-[#e5c069]";
+        : source === "paste"
+          ? "bg-[#33241f] text-[#e0a08e]"
+          : "bg-[#3a301d] text-[#e5c069]";
   return (
     <span className={`rounded px-1.5 py-0.5 font-display text-[10px] font-bold tracking-wider ${cls}`}>
       {source.toUpperCase()}

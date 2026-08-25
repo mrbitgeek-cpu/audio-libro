@@ -6,6 +6,7 @@ import {
   IcEpub,
   IcFilePdf,
   IcLogo,
+  IcPen,
   IcShield,
   IcSparkle,
   IcUpload,
@@ -15,6 +16,7 @@ import {
 interface Props {
   onFiles: (files: FileList | File[]) => void;
   onDemo: () => void;
+  onPaste: () => void;
 }
 
 const MARQUEE = [
@@ -22,11 +24,12 @@ const MARQUEE = [
   "ignora números de página",
   "olvida cabeceras repetidas",
   "pasa la página sola",
+  "lee lo que pegues a mano",
   "elige voz y velocidad",
   "todo ocurre en tu navegador",
 ];
 
-export default function Landing({ onFiles, onDemo }: Props) {
+export default function Landing({ onFiles, onDemo, onPaste }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState(false);
 
@@ -207,6 +210,22 @@ export default function Landing({ onFiles, onDemo }: Props) {
               </span>
             </span>
             <IcArrowR className="h-5 w-5 shrink-0 text-gold-600 transition-transform group-hover:translate-x-1" />
+          </button>
+
+          <button
+            onClick={onPaste}
+            className="group mt-3 flex w-full items-center justify-between rounded-lg border border-line bg-card/70 px-5 py-3.5 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-teal-500 hover:bg-teal-500/10"
+          >
+            <span className="flex items-center gap-3">
+              <IcPen className="h-5 w-5 text-teal-600 transition-transform group-hover:-rotate-12" />
+              <span>
+                <span className="block font-display text-[14px] font-bold">Pegar texto a mano</span>
+                <span className="block font-body text-[12.5px] italic text-ink-soft">
+                  Un artículo, unos apuntes, un poema… se pagina solo y se lee igual.
+                </span>
+              </span>
+            </span>
+            <IcArrowR className="h-5 w-5 shrink-0 text-teal-600 transition-transform group-hover:translate-x-1" />
           </button>
         </div>
       </main>
