@@ -1,265 +1,232 @@
-import { useEffect, useState } from "react";
-import Dropzone from "./Dropzone";
-import Waveform from "./Waveform";
+import { useRef, useState } from "react";
 import {
-  LogoMark,
-  IconBook,
-  IconFootnote,
-  IconPageNum,
-  IconRunning,
-  IconToc,
-  IconKeys,
-  IconSpeaker,
-  IconCheck,
+  IcArrowR,
+  IcAsterisk,
+  IcBook,
+  IcEpub,
+  IcFilePdf,
+  IcLogo,
+  IcShield,
+  IcSparkle,
+  IcUpload,
+  IcWave,
 } from "./icons";
 
-const DEMO_SENTENCES = [
-  "En un lugar de la Mancha, de cuyo nombre no quiero acordarme…",
-  "no ha mucho tiempo que vivía un hidalgo de los de lanza en astillero,",
-  "adarga antigua, rocín flaco y galgo corredor.",
-  "Una olla de algo más vaca que carnero, salpicón las más noches,",
-  "consumían las tres partes de su hacienda.",
+interface Props {
+  onFiles: (files: FileList | File[]) => void;
+  onDemo: () => void;
+}
+
+const MARQUEE = [
+  "salta las notas al pie",
+  "ignora números de página",
+  "olvida cabeceras repetidas",
+  "pasa la página sola",
+  "elige voz y velocidad",
+  "todo ocurre en tu navegador",
 ];
 
-const CLEAN_ITEMS = [
-  {
-    n: "01",
-    icon: IconFootnote,
-    title: "Notas al pie y referencias",
-    desc: "Bloques de fuente pequeña al cierre de página, marcadores [12], superíndices ³ y llamadas †‡§ desaparecen del guion hablado.",
-  },
-  {
-    n: "02",
-    icon: IconPageNum,
-    title: "Números de página",
-    desc: "«47», «pág. 12», folios en romanos… nada de dígitos sueltos interrumpiendo la narración entre página y página.",
-  },
-  {
-    n: "03",
-    icon: IconRunning,
-    title: "Encabezados y pies repetidos",
-    desc: "El título del libro o del capítulo que se imprime en cada hoja se detecta por repetición y se silencia una sola vez basta.",
-  },
-  {
-    n: "04",
-    icon: IconToc,
-    title: "Índices y navegación",
-    desc: "Tablas de contenido, listas de enlaces y colofones de EPUB se omiten para saltar directo al primer capítulo.",
-  },
-];
-
-export default function Landing({
-  onFile,
-  onSample,
-}: {
-  onFile: (f: File) => void;
-  onSample: () => void;
-}) {
-  const [active, setActive] = useState(0);
-
-  useEffect(() => {
-    const id = window.setInterval(() => setActive((a) => (a + 1) % DEMO_SENTENCES.length), 2200);
-    return () => window.clearInterval(id);
-  }, []);
+export default function Landing({ onFiles, onDemo }: Props) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [drag, setDrag] = useState(false);
 
   return (
-    <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-6xl flex-col px-5 pb-10 pt-6 sm:px-8">
-      {/* barra superior */}
-      <header className="rise-in flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-md bg-amber/12 text-amber ring-1 ring-amber/30">
-            <LogoMark size={21} />
+    <div className="app-bg relative flex min-h-dvh flex-col overflow-hidden text-ink">
+      {/* glifo ambiental */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute -right-16 -top-40 select-none font-body text-[34rem] leading-none text-teal-600/[0.06]"
+      >
+        «
+      </span>
+
+      {/* cabecera */}
+      <header className="relative z-10 flex items-center justify-between px-6 py-5 md:px-12">
+        <div className="flex items-center gap-3">
+          <span className="grid h-10 w-10 place-items-center rounded-xl bg-pine-950 text-gold-400 shadow-lg">
+            <IcLogo className="h-6 w-6" />
           </span>
           <div className="leading-tight">
-            <p className="font-display text-[17px] font-bold tracking-tight text-snow">
-              Voz de Página
-            </p>
-            <p className="font-mono text-[9.5px] uppercase tracking-[0.22em] text-fog">
-              lector que habla
-            </p>
+            <p className="font-display text-xl font-bold tracking-tight">Vozalta</p>
+            <p className="font-body text-[12px] italic text-ink-soft">el lector que escucha</p>
           </div>
         </div>
-        <span className="hidden items-center gap-1.5 rounded-full border border-line bg-panel px-3 py-1.5 text-[11px] font-medium text-fog sm:inline-flex">
-          <IconCheck size={13} className="text-moss" />
-          100% local · nada se sube
+        <span className="hidden items-center gap-2 rounded-full border border-line bg-card px-3.5 py-1.5 font-display text-[12px] font-semibold text-teal-600 sm:flex">
+          <IcShield className="h-4 w-4" />
+          100% local · tus archivos no se suben
         </span>
       </header>
 
-      {/* apertura: escritorio de lectura */}
-      <main className="mt-10 grid flex-1 items-start gap-12 lg:mt-16 lg:grid-cols-12 lg:gap-8">
-        <section className="rise-in lg:col-span-7" style={{ animationDelay: "80ms" }}>
-          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.28em] text-amber">
-            PDF · EPUB · TXT → audio
+      {/* cuerpo */}
+      <main className="relative z-10 mx-auto grid w-full max-w-6xl flex-1 items-center gap-12 px-6 py-8 md:px-12 lg:grid-cols-[1.08fr_0.92fr] lg:gap-16">
+        {/* columna editorial */}
+        <div>
+          <p className="rise-in flex items-center gap-2 font-display text-[12px] font-bold uppercase tracking-[0.28em] text-teal-600">
+            <span className="h-px w-8 bg-teal-500" />
+            PDF · EPUB → voz
           </p>
-          <h1 className="mt-4 font-display text-[clamp(2.6rem,6.2vw,4.6rem)] font-extrabold leading-[0.98] tracking-tight text-snow">
-            Tu documento
-            <br />
-            <span className="italic text-amber2">se lee solo</span>
-            <span className="caret-blink text-amber">.</span>
-          </h1>
-          <p className="mt-5 max-w-xl text-[17px] leading-relaxed text-fog">
-            Abre un libro o un informe y escúchalo con la voz de tu navegador. La página{" "}
-            <strong className="font-bold text-snow">pasa sola cuando termina la lectura</strong>, y
-            antes de hablar se apartan notas al pie, folios, encabezados e índices: solo queda la
-            voz del texto.
-          </p>
-
-          <div className="mt-8 max-w-xl">
-            <Dropzone onFile={onFile} />
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <button
-                onClick={onSample}
-                className="group inline-flex items-center gap-2.5 rounded-md border border-line bg-panel px-4 py-2.5 text-sm font-bold text-snow transition-all hover:-translate-y-0.5 hover:border-amber/50 hover:shadow-[0_8px_30px_-10px_rgba(237,164,62,0.4)]"
-              >
-                <IconBook size={17} className="text-amber transition-transform group-hover:-rotate-6" />
-                Probar con el Quijote
-                <span className="rounded-sm bg-ink2 px-1.5 py-0.5 font-mono text-[10px] text-fog">
-                  muestra
-                </span>
-              </button>
-              <p className="text-xs text-fog/80">
-                Capítulo I, II y VIII · con notas al pie de muestra para ver la limpieza
-              </p>
-            </div>
-          </div>
-
-          {/* atajos */}
-          <div className="mt-10 flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] text-fog">
-            <span className="inline-flex items-center gap-1.5">
-              <IconKeys size={15} className="text-fog/70" />
-              Atajos dentro del lector:
+          <h1 className="rise-in mt-4 font-display text-[2.7rem] font-extrabold leading-[1.02] tracking-tight sm:text-6xl lg:text-[4.2rem]">
+            Deja de leer.
+            <span className="mt-1 block font-body text-[0.72em] font-medium italic tracking-normal text-pine-800">
+              Empieza a <span className="text-teal-600 underline decoration-gold-400 decoration-[6px] underline-offset-[6px]">escuchar</span>.
             </span>
+          </h1>
+          <p className="rise-in mt-6 max-w-xl font-body text-[17px] leading-relaxed text-ink-soft" style={{ animationDelay: "80ms" }}>
+            Vozalta abre tus <strong className="text-ink">PDF</strong> y{" "}
+            <strong className="text-ink">EPUB</strong>, limpia el ruido de imprenta —notas al
+            pie, folios, cabeceras— y te lo lee en voz alta, pasando cada página en el
+            momento exacto.
+          </p>
+
+          {/* qué hace, en vertical */}
+          <ul className="rise-in mt-8 max-w-xl" style={{ animationDelay: "160ms" }}>
             {[
-              ["Espacio", "reproducir / pausar"],
-              ["←  →", "cambiar página"],
-              ["↑  ↓", "velocidad"],
-            ].map(([k, d]) => (
-              <span key={k} className="inline-flex items-center gap-1.5">
-                <kbd className="rounded-sm border border-line bg-panel px-1.5 py-0.5 font-mono text-[10px] text-snow">
-                  {k}
-                </kbd>
-                {d}
-              </span>
-            ))}
-          </div>
-        </section>
-
-        {/* composición viva: la hoja que escucha */}
-        <aside
-          className="rise-in relative hidden select-none lg:col-span-5 lg:block"
-          style={{ animationDelay: "200ms" }}
-          aria-hidden
-        >
-          <div className="relative mx-auto mt-2 w-[min(100%,360px)]">
-            {/* anillos de voz */}
-            <div className="absolute -right-10 -top-10 h-40 w-40">
-              <span className="ring-pulse absolute inset-0 rounded-full border border-amber/30" />
-              <span className="ring-pulse absolute inset-0 rounded-full border border-amber/20" style={{ animationDelay: "0.8s" }} />
-              <span className="ring-pulse absolute inset-0 rounded-full border border-amber/10" style={{ animationDelay: "1.6s" }} />
-            </div>
-
-            {/* hojas apiladas */}
-            <div className="absolute inset-0 translate-x-3 translate-y-3 rotate-[4deg] rounded-sm bg-paper2/30" />
-            <div className="absolute inset-0 -translate-x-2 translate-y-2 -rotate-[2.5deg] rounded-sm bg-paper2/50" />
-
-            {/* hoja principal */}
-            <div className="paper-grain relative rotate-[1.2deg] rounded-sm bg-paper px-7 py-6 text-pencil shadow-[0_30px_70px_-20px_rgba(0,0,0,0.65)] ring-1 ring-black/20">
-              <div className="flex items-center justify-between border-b border-pencil/15 pb-3">
-                <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-pencil2">
-                  Capítulo I
-                </span>
-                <span className="font-mono text-[10px] text-pencil2">pág. 1 / 6</span>
-              </div>
-              <div className="mt-4 space-y-2.5 font-body text-[13.5px] leading-relaxed">
-                {DEMO_SENTENCES.map((s, i) => (
-                  <p
-                    key={i}
-                    className={`inline transition-colors duration-300 ${
-                      i === active
-                        ? "hl-sentence font-bold"
-                        : i < active
-                          ? "spoken-sentence"
-                          : "text-pencil/90"
-                    }`}
-                  >
-                    {s}{" "}
-                  </p>
-                ))}
-              </div>
-              <div className="mt-5 flex items-center justify-between border-t border-pencil/15 pt-3.5">
-                <Waveform status="playing" bars={18} tone="ink" className="h-5" />
-                <span className="font-mono text-[10px] tracking-wide text-pencil2">
-                  voz es-ES · 1.2×
-                </span>
-              </div>
-              {/* esquina doblada */}
-              <div className="absolute bottom-0 right-0 h-7 w-7">
-                <div className="absolute bottom-0 right-0 h-0 w-0 border-b-[28px] border-l-[28px] border-b-ink/80 border-l-transparent opacity-20" />
-                <div className="absolute bottom-0 right-0 h-0 w-0 border-b-[26px] border-l-[26px] border-b-paper2 border-l-transparent" />
-              </div>
-            </div>
-
-            {/* chip flotante: nota omitida */}
-            <div className="glow-breathe absolute -left-8 bottom-16 flex items-center gap-2 rounded-md border border-line bg-panel px-3 py-2 text-[11px] font-medium text-fog shadow-xl">
-              <IconFootnote size={14} className="text-amber" />
-              nota al pie omitida
-              <span className="font-mono text-[10px] text-moss">✓</span>
-            </div>
-            <div className="absolute -right-4 top-24 flex items-center gap-2 rounded-md border border-line bg-panel px-3 py-2 text-[11px] font-medium text-fog shadow-xl">
-              <IconSpeaker size={14} className="text-amber" />
-              pase automático activo
-            </div>
-          </div>
-        </aside>
-      </main>
-
-      {/* la limpieza */}
-      <section className="mt-16 grid gap-8 border-t border-line pt-10 lg:grid-cols-12">
-        <div className="lg:col-span-4">
-          <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-amber">
-            guion limpio
-          </p>
-          <h2 className="mt-3 font-display text-3xl font-bold leading-tight tracking-tight text-snow sm:text-4xl">
-            Antes de hablar,
-            <br />
-            se <em className="text-amber2">limpia</em> la página
-          </h2>
-          <p className="mt-4 max-w-sm text-sm leading-relaxed text-fog">
-            Cada página pasa por un filtro que reconoce el mobiliario del libro y lo aparta del
-            audio. Lo omitido no se borra: queda contado y consultable en el panel del lector.
-          </p>
-        </div>
-        <div className="lg:col-span-8">
-          <ul className="grid gap-x-10 sm:grid-cols-2">
-            {CLEAN_ITEMS.map((it, i) => (
+              {
+                icon: IcAsterisk,
+                title: "Limpieza de imprenta",
+                desc: "Notas al pie, números de página y cabeceras repetidas se detectan por posición, tamaño y patrón.",
+                tone: "text-gold-600 bg-gold-400/15",
+              },
+              {
+                icon: IcBook,
+                title: "Pase automático de página",
+                desc: "La vista avanza sola al compás de la voz; la frase que suena queda iluminada.",
+                tone: "text-teal-600 bg-teal-500/10",
+              },
+              {
+                icon: IcWave,
+                title: "Voz a tu gusto",
+                desc: "Elige la voz del sistema, velocidad de 0,7× a 1,6× y tono. Toca cualquier frase para leer desde ahí.",
+                tone: "text-pine-800 bg-pine-800/10",
+              },
+            ].map((f) => (
               <li
-                key={it.n}
-                className={`group relative border-t border-line py-6 pr-4 transition-transform duration-300 hover:-translate-y-1 ${
-                  i % 2 === 1 ? "sm:translate-y-4" : ""
-                }`}
+                key={f.title}
+                className="group flex gap-4 border-t border-line py-4 transition-all duration-200 last:border-b hover:translate-x-1.5"
               >
-                <div className="flex items-baseline gap-3">
-                  <span className="font-mono text-[11px] font-semibold text-amber/70">{it.n}</span>
-                  <h3 className="flex items-center gap-2 font-display text-lg font-bold text-snow">
-                    <it.icon size={19} className="text-amber transition-transform duration-300 group-hover:scale-110" />
-                    {it.title}
-                  </h3>
+                <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${f.tone}`}>
+                  <f.icon className="h-[18px] w-[18px]" />
+                </span>
+                <div>
+                  <p className="font-display text-[15px] font-bold tracking-tight">{f.title}</p>
+                  <p className="mt-0.5 font-body text-[13.5px] leading-relaxed text-ink-soft">{f.desc}</p>
                 </div>
-                <p className="mt-2 pl-8 text-[13.5px] leading-relaxed text-fog">{it.desc}</p>
               </li>
             ))}
           </ul>
         </div>
-      </section>
 
-      <footer className="mt-12 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-5 text-[11px] text-fog/80">
-        <span className="inline-flex items-center gap-2">
-          <LogoMark size={14} className="text-amber" />
-          Voz de Página — hecho con Web Speech API · PDF.js · EPUB (ZIP)
-        </span>
-        <span className="font-mono tracking-wide">
-          la síntesis de voz ocurre en tu navegador
-        </span>
+        {/* ficha de préstamo */}
+        <div className="rise-in" style={{ animationDelay: "120ms" }}>
+          <div
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDrag(true);
+            }}
+            onDragLeave={() => setDrag(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDrag(false);
+              if (e.dataTransfer.files.length) onFiles(e.dataTransfer.files);
+            }}
+            onClick={() => inputRef.current?.click()}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => e.key === "Enter" && inputRef.current?.click()}
+            className={`group relative cursor-pointer border-2 border-dashed px-8 py-12 text-center shadow-[0_24px_60px_-24px_rgba(23,28,26,0.35)] transition-all duration-300 ${
+              drag
+                ? "scale-[1.02] border-gold-500 bg-gold-300/30"
+                : "border-pine-800/35 bg-card hover:-translate-y-1 hover:border-teal-500 hover:shadow-[0_30px_70px_-24px_rgba(14,122,95,0.4)]"
+            }`}
+          >
+            {/* esquinas de ficha */}
+            <span className="absolute left-3 top-3 h-3 w-3 border-l-2 border-t-2 border-teal-500/60" aria-hidden />
+            <span className="absolute right-3 top-3 h-3 w-3 border-r-2 border-t-2 border-teal-500/60" aria-hidden />
+            <span className="absolute bottom-3 left-3 h-3 w-3 border-b-2 border-l-2 border-teal-500/60" aria-hidden />
+            <span className="absolute bottom-3 right-3 h-3 w-3 border-b-2 border-r-2 border-teal-500/60" aria-hidden />
+
+            <p className="font-display text-[11px] font-bold uppercase tracking-[0.3em] text-ink-soft/70">
+              Ficha de préstamo
+            </p>
+
+            <div className="relative mx-auto mt-6 grid h-20 w-20 place-items-center">
+              <span className={`absolute inset-0 rounded-full bg-teal-500/15 transition-transform duration-500 ${drag ? "scale-125" : "group-hover:scale-110"}`} />
+              <span className="pulse-ring absolute inset-0 rounded-full border-2 border-teal-500/40" aria-hidden />
+              <IcUpload
+                className={`relative h-9 w-9 transition-all duration-300 ${
+                  drag ? "-translate-y-1 text-gold-600" : "text-teal-600 group-hover:-translate-y-1"
+                }`}
+              />
+            </div>
+
+            <p className="mt-5 font-display text-2xl font-bold tracking-tight">
+              {drag ? "Suéltalo aquí" : "Arrastra tu libro"}
+            </p>
+            <p className="mt-1 font-body text-[14px] italic text-ink-soft">
+              o pulsa para elegirlo desde tu equipo
+            </p>
+
+            <div className="mt-5 flex items-center justify-center gap-2">
+              <span className="flex items-center gap-1.5 rounded-md bg-[#3b2b20] px-2.5 py-1 font-display text-[11px] font-bold tracking-wider text-[#e8b184]">
+                <IcFilePdf className="h-3.5 w-3.5" /> PDF
+              </span>
+              <span className="flex items-center gap-1.5 rounded-md bg-pine-900 px-2.5 py-1 font-display text-[11px] font-bold tracking-wider text-[#7fc7a8]">
+                <IcEpub className="h-3.5 w-3.5" /> EPUB
+              </span>
+            </div>
+
+            <span className="mt-7 inline-flex items-center gap-2 rounded-full bg-pine-950 px-6 py-3 font-display text-[14px] font-bold text-fern shadow-lg transition-all duration-200 group-hover:bg-teal-600 group-active:scale-95">
+              Abrir libro
+              <IcArrowR className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+            </span>
+
+            <input
+              ref={inputRef}
+              type="file"
+              accept=".pdf,.epub,application/pdf,application/epub+zip"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files?.length) onFiles(e.target.files);
+                e.target.value = "";
+              }}
+            />
+          </div>
+
+          <button
+            onClick={onDemo}
+            className="group mt-5 flex w-full items-center justify-between rounded-lg border border-line bg-card/70 px-5 py-3.5 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-gold-500 hover:bg-gold-300/25"
+          >
+            <span className="flex items-center gap-3">
+              <IcSparkle className="h-5 w-5 text-gold-600 transition-transform group-hover:rotate-12" />
+              <span>
+                <span className="block font-display text-[14px] font-bold">¿Sin un archivo a mano?</span>
+                <span className="block font-body text-[12.5px] italic text-ink-soft">
+                  Escucha el demo: Don Quijote, con notas al pie incluidas para ver la limpieza.
+                </span>
+              </span>
+            </span>
+            <IcArrowR className="h-5 w-5 shrink-0 text-gold-600 transition-transform group-hover:translate-x-1" />
+          </button>
+        </div>
+      </main>
+
+      {/* cinta corrediza */}
+      <footer className="relative z-10 border-t border-line bg-pine-950 py-3 text-fern">
+        <div className="marquee">
+          <div className="marquee-track">
+            {[0, 1].map((k) => (
+              <div key={k} className="flex shrink-0 items-center">
+                {MARQUEE.map((m) => (
+                  <span key={m + k} className="flex items-center font-display text-[12px] font-bold uppercase tracking-[0.18em]">
+                    <span className="px-5">{m}</span>
+                    <IcSparkle className="h-3.5 w-3.5 text-gold-400" />
+                  </span>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
       </footer>
     </div>
   );

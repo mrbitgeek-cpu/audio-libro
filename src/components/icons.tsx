@@ -1,185 +1,210 @@
 import type { SVGProps } from "react";
 
-type P = SVGProps<SVGSVGElement> & { size?: number };
+type P = SVGProps<SVGSVGElement>;
 
-const base = (size?: number) => ({
-  width: size ?? 20,
-  height: size ?? 20,
+const base: P = {
   viewBox: "0 0 24 24",
   fill: "none",
   stroke: "currentColor",
   strokeWidth: 1.8,
-  strokeLinecap: "round" as const,
-  strokeLinejoin: "round" as const,
-});
+  strokeLinecap: "round",
+  strokeLinejoin: "round",
+  "aria-hidden": true,
+};
 
-/** Libro abierto del que emergen ondas de voz. */
-export function LogoMark({ size, ...p }: P) {
-  return (
-    <svg {...base(size)} {...p}>
-      <path d="M12 6.5C10 4.9 7.3 4.4 4 4.4v13.2c3.3 0 6 .5 8 2.1 2-1.6 4.7-2.1 8-2.1V4.4c-3.3 0-6 .5-8 2.1Z" />
-      <path d="M12 6.5v13.2" />
-      <path d="M16.8 1.6c1.9 1.5 1.9 3.7 0 5.2" opacity=".85" />
-      <path d="M19.2.2c2.9 2.5 2.9 6.5 0 9" opacity=".55" />
-    </svg>
-  );
-}
-
-export const IconPlay = ({ size, ...p }: P) => (
-  <svg {...base(size)} {...p}>
-    <path d="M7.5 5.2v13.6c0 .8.9 1.3 1.6.9l10.4-6.8c.6-.4.6-1.4 0-1.8L9.1 4.3c-.7-.4-1.6.1-1.6.9Z" fill="currentColor" stroke="none" />
+export const IcLogo = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M12 6.3C10.1 4.8 7.4 4.2 4 4.2v13.6c3.4 0 6.1.6 8 2.1 1.9-1.5 4.6-2.1 8-2.1V4.2c-3.4 0-6.1.6-8 2.1Z" />
+    <path d="M12 6.3v13.6" />
+    <path d="M15.6 8.6c.5 1 .5 2 0 3M17.8 7.2c1 1.8 1 3.6 0 5.4" strokeWidth={1.5} />
   </svg>
 );
 
-export const IconPause = ({ size, ...p }: P) => (
-  <svg {...base(size)} {...p}>
-    <rect x="6.5" y="4.5" width="3.6" height="15" rx="1" fill="currentColor" stroke="none" />
-    <rect x="13.9" y="4.5" width="3.6" height="15" rx="1" fill="currentColor" stroke="none" />
+export const IcPlay = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M8 5.4v13.2c0 .8.9 1.3 1.6.9l10.2-6.6c.6-.4.6-1.4 0-1.8L9.6 4.5c-.7-.4-1.6.1-1.6.9Z" fill="currentColor" stroke="none" />
   </svg>
 );
 
-export const IconPrev = ({ size, ...p }: P) => (
-  <svg {...base(size)} {...p}>
-    <path d="M17 5.5v13M14.5 12 7 17V7l7.5 5Z" fill="currentColor" stroke="none" />
-    <path d="M17 5.5v13" />
+export const IcPause = (p: P) => (
+  <svg {...base} {...p}>
+    <rect x="6.5" y="5" width="3.6" height="14" rx="1" fill="currentColor" stroke="none" />
+    <rect x="13.9" y="5" width="3.6" height="14" rx="1" fill="currentColor" stroke="none" />
   </svg>
 );
 
-export const IconNext = ({ size, ...p }: P) => (
-  <svg {...base(size)} {...p}>
-    <path d="M7 5.5v13M9.5 12 17 17V7l-7.5 5Z" fill="currentColor" stroke="none" />
-    <path d="M7 5.5v13" />
+export const IcStop = (p: P) => (
+  <svg {...base} {...p}>
+    <rect x="6.5" y="6.5" width="11" height="11" rx="1.6" fill="currentColor" stroke="none" />
   </svg>
 );
 
-export const IconRestart = ({ size, ...p }: P) => (
-  <svg {...base(size)} {...p}>
-    <path d="M4.5 9a8 8 0 1 1-1 5.5" />
-    <path d="M4 4.5V9h4.5" />
+export const IcPrev = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M11.5 7.5 6 12l5.5 4.5M18 7.5 12.5 12l5.5 4.5" />
   </svg>
 );
 
-export const IconDoc = ({ size, ...p }: P) => (
-  <svg {...base(size)} {...p}>
-    <path d="M6 2.8h8l4 4.2v14.2H6z" />
-    <path d="M14 2.8V7h4" />
-    <path d="M9 12h6M9 15.5h6M9 8.5h2.5" />
+export const IcNext = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="m6 7.5 5.5 4.5L6 16.5M12.5 7.5 18 12l-5.5 4.5" />
   </svg>
 );
 
-export const IconDrop = ({ size, ...p }: P) => (
-  <svg {...base(size)} {...p}>
-    <path d="M12 3.5v9" />
-    <path d="M8.5 9 12 12.5 15.5 9" />
-    <path d="M4.5 15.5v3a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-3" />
+export const IcChevL = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="m14.5 5.5-6.5 6.5 6.5 6.5" />
   </svg>
 );
 
-/** Nota al pie: párrafo con sangría y marca numérica. */
-export const IconFootnote = ({ size, ...p }: P) => (
-  <svg {...base(size)} {...p}>
-    <path d="M4 4.5h16M4 8h16M4 11.5h10" />
-    <path d="M13.5 16.5v3.6h2.6" />
-    <path d="M16.1 16.5h2.2M17.2 16.5v3.6" opacity=".9" />
+export const IcChevR = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="m9.5 5.5 6.5 6.5-6.5 6.5" />
   </svg>
 );
 
-/** Número de página tachado. */
-export const IconPageNum = ({ size, ...p }: P) => (
-  <svg {...base(size)} {...p}>
-    <path d="M5 5h14v14H5z" />
-    <path d="M9.2 9.2 12 12l2.8 2.8M14.8 9.2 12 12 9.2 14.8" opacity=".9" />
-    <path d="M3.5 20.5l17-17" strokeWidth="2" />
+export const IcUpload = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M12 15V4m0 0 4 4m-4-4L8 8" />
+    <path d="M4 15v3.4c0 .9.7 1.6 1.6 1.6h12.8c.9 0 1.6-.7 1.6-1.6V15" />
   </svg>
 );
 
-/** Encabezado/pie repetido: líneas cortas arriba y abajo. */
-export const IconRunning = ({ size, ...p }: P) => (
-  <svg {...base(size)} {...p}>
-    <path d="M7 4.5h10" />
-    <path d="M4 8.5h16M4 12h16M4 15.5h16" opacity=".9" />
-    <path d="M7 19.5h10" />
-    <path d="M3 4.5h1.5M19.5 4.5H21M3 19.5h1.5M19.5 19.5H21" opacity=".6" />
+export const IcPlus = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M12 5v14M5 12h14" />
   </svg>
 );
 
-export const IconToc = ({ size, ...p }: P) => (
-  <svg {...base(size)} {...p}>
-    <path d="M4 5h9M4 12h11M4 19h7" />
-    <path d="M17 5h3M18.5 12H21M15.5 19h3" opacity=".6" />
-    <path d="M16.5 5 19 7.5 16.5 10" opacity=".8" />
-  </svg>
-);
-
-export const IconX = ({ size, ...p }: P) => (
-  <svg {...base(size)} {...p}>
+export const IcX = (p: P) => (
+  <svg {...base} {...p}>
     <path d="m6 6 12 12M18 6 6 18" />
   </svg>
 );
 
-export const IconCheck = ({ size, ...p }: P) => (
-  <svg {...base(size)} {...p}>
-    <path d="m5 12.5 4.5 4.5L19 7" />
+export const IcBook = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M4 19.2V5.6C4 4.7 4.7 4 5.6 4H19a1 1 0 0 1 1 1v12.5a1 1 0 0 1-1 1H6.4c-1.3 0-2.4 1-2.4 2.3 0-1.2 1-1.6 2.4-1.6H20" />
   </svg>
 );
 
-export const IconAlert = ({ size, ...p }: P) => (
-  <svg {...base(size)} {...p}>
-    <path d="M12 3.5 22 20H2L12 3.5Z" />
-    <path d="M12 10v4.2M12 17.2v.1" />
+export const IcFilePdf = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M13.5 3H7a1.6 1.6 0 0 0-1.6 1.6v14.8A1.6 1.6 0 0 0 7 21h10a1.6 1.6 0 0 0 1.6-1.6V8.1L13.5 3Z" />
+    <path d="M13.5 3v5.1h5.1" />
+    <path d="M8.5 13.5h7M8.5 16.5h5" />
   </svg>
 );
 
-export const IconSpeaker = ({ size, ...p }: P) => (
-  <svg {...base(size)} {...p}>
-    <path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5H4Z" />
-    <path d="M15.5 9c1.6 1.6 1.6 4.4 0 6" />
-    <path d="M18 6.5c3 3 3 8 0 11" opacity=".6" />
+export const IcEpub = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M12 6.6C10.2 5.2 7.6 4.6 4.4 4.6v13c3.2 0 5.8.6 7.6 2 1.8-1.4 4.4-2 7.6-2v-13c-3.2 0-5.8.6-7.6 2Z" />
+    <path d="M12 6.6v13" />
   </svg>
 );
 
-export const IconFilter = ({ size, ...p }: P) => (
-  <svg {...base(size)} {...p}>
+export const IcSparkle = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M12 4.5c.6 3.4 2.1 4.9 5.5 5.5-3.4.6-4.9 2.1-5.5 5.5-.6-3.4-2.1-4.9-5.5-5.5 3.4-.6 4.9-2.1 5.5-5.5Z" />
+    <path d="M18.5 15.5c.3 1.6 1 2.3 2.5 2.6-1.5.3-2.2 1-2.5 2.6-.3-1.6-1-2.3-2.5-2.6 1.5-.3 2.2-1 2.5-2.6Z" />
+  </svg>
+);
+
+export const IcFunnel = (p: P) => (
+  <svg {...base} {...p}>
     <path d="M4 5h16l-6.2 7.2v5.3L10.2 20v-7.8L4 5Z" />
   </svg>
 );
 
-export const IconChevL = ({ size, ...p }: P) => (
-  <svg {...base(size)} {...p}>
-    <path d="m14.5 5.5-6 6.5 6 6.5" />
+export const IcHash = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M9.5 4 8 20M16 4l-1.5 16M5 9h15M4 15h15" />
   </svg>
 );
 
-export const IconChevR = ({ size, ...p }: P) => (
-  <svg {...base(size)} {...p}>
-    <path d="m9.5 5.5 6 6.5-6 6.5" />
+export const IcLayers = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="m12 3.5 8 4.2-8 4.2-8-4.2 8-4.2Z" />
+    <path d="m4 12.3 8 4.2 8-4.2M4 16.5l8 4.2 8-4.2" opacity={0.55} />
   </svg>
 );
 
-export const IconKeys = ({ size, ...p }: P) => (
-  <svg {...base(size)} {...p}>
-    <rect x="3" y="7" width="18" height="11" rx="1.5" />
-    <path d="M6.5 10.2h.1M10 10.2h.1M13.5 10.2h.1M17 10.2h.1M8 14.5h8" />
+export const IcAsterisk = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M12 4.5v15M5.5 8.2l13 7.6M18.5 8.2l-13 7.6" />
   </svg>
 );
 
-export const IconWave = ({ size, ...p }: P) => (
-  <svg {...base(size)} {...p}>
-    <path d="M3 12h1.5" />
-    <path d="M7 8.5v7M11 5.5v13M15 8v8M19 10v4" />
+export const IcClock = (p: P) => (
+  <svg {...base} {...p}>
+    <circle cx="12" cy="12" r="8.2" />
+    <path d="M12 7.5V12l3 2.2" />
   </svg>
 );
 
-export const IconBook = ({ size, ...p }: P) => (
-  <svg {...base(size)} {...p}>
-    <path d="M4 4.8h6.2c1 0 1.8.8 1.8 1.8v12.6c-.9-.7-2.2-1.1-3.6-1.1H4V4.8Z" />
-    <path d="M20 4.8h-6.2c-1 0-1.8.8-1.8 1.8v12.6c.9-.7 2.2-1.1 3.6-1.1H20V4.8Z" />
+export const IcTrash = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M4.5 6.5h15M9.5 6V4.6c0-.6.4-1 1-1h3c.6 0 1 .4 1 1V6M6.5 6.5l.8 12.2c0 .7.6 1.3 1.3 1.3h6.8c.7 0 1.3-.6 1.3-1.3l.8-12.2" />
+    <path d="M10 10.5v6M14 10.5v6" opacity={0.6} />
   </svg>
 );
 
-export const IconClock = ({ size, ...p }: P) => (
-  <svg {...base(size)} {...p}>
-    <circle cx="12" cy="12" r="8.5" />
-    <path d="M12 7.5V12l3 2" />
+export const IcVoice = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M11 5.4 6.8 9H4.2v6h2.6L11 18.6V5.4Z" />
+    <path d="M14.5 9.2a4 4 0 0 1 0 5.6M17 6.8a7.4 7.4 0 0 1 0 10.4" />
+  </svg>
+);
+
+export const IcMenu = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M4 7h16M4 12h16M4 17h10" />
+  </svg>
+);
+
+export const IcEye = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M2.8 12S6.2 5.8 12 5.8 21.2 12 21.2 12 17.8 18.2 12 18.2 2.8 12 2.8 12Z" />
+    <circle cx="12" cy="12" r="2.6" />
+  </svg>
+);
+
+export const IcAlert = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M12 4.2 2.8 19.4h18.4L12 4.2Z" />
+    <path d="M12 10v4.2M12 16.8v.4" />
+  </svg>
+);
+
+export const IcCheck = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="m5 12.5 4.5 4.5L19 7.5" />
+  </svg>
+);
+
+export const IcGauge = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M4.5 16.5a8.5 8.5 0 1 1 15 0" />
+    <path d="m12 14 3.5-4.5" />
+    <circle cx="12" cy="14.5" r="1.3" fill="currentColor" stroke="none" />
+  </svg>
+);
+
+export const IcWave = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M3 12h1.8M6.6 8.5v7M10.2 5.5v13M13.8 8v8M17.4 6.5v11M21 10v4" />
+  </svg>
+);
+
+export const IcArrowR = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M4 12h15m0 0-5.5-5.5M19 12l-5.5 5.5" />
+  </svg>
+);
+
+export const IcShield = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M12 3.5 5 6v5.6c0 4.4 2.9 7.4 7 8.9 4.1-1.5 7-4.5 7-8.9V6l-7-2.5Z" />
+    <path d="m9 11.8 2.2 2.2L15.4 9.6" />
   </svg>
 );

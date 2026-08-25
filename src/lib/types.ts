@@ -1,44 +1,55 @@
-export interface Paragraph {
+/** Línea cruda extraída de una página (PDF o demo). `y` sigue la convención PDF: 0 = borde inferior. */
+export interface RawLine {
   text: string;
-  heading?: boolean;
-  /** índice global de la primera oración de este párrafo dentro de la página */
-  s0: number;
-  /** índice global (exclusivo) de la última oración */
-  s1: number;
+  size: number;
+  y: number;
+  pageH: number;
+  x: number;
 }
 
-export interface Page {
-  id: string;
-  chapterIndex: number;
-  paragraphs: Paragraph[];
-  /** oraciones aplanadas de toda la página, en orden de lectura */
-  sentences: string[];
-  /** líneas omitidas por el limpiador en esta página */
-  removed: string[];
+/** Página ya limpia: lista de párrafos. */
+export interface PageBlock {
+  paragraphs: string[];
+}
+
+export interface FilterOpts {
+  pageNumbers: boolean;
+  running: boolean;
+  footnotes: boolean;
+}
+
+export interface FilterStats {
+  pageNumbers: number;
+  running: number;
+  footnotes: number;
+}
+
+export interface Sentence {
+  id: number;
+  text: string;
+  page: number;
+}
+
+export interface BookPage {
+  paragraphs: Sentence[][];
+}
+
+export interface BuiltBook {
+  pages: BookPage[];
+  sentences: Sentence[];
   words: number;
-}
-
-export interface Chapter {
-  title: string;
-  startPage: number;
-  endPage: number;
+  minutes: number;
+  stats: FilterStats;
 }
 
 export interface Book {
+  id: string;
   title: string;
   author?: string;
-  source: "pdf" | "epub" | "txt" | "sample";
-  fileName: string;
-  pages: Page[];
-  chapters: Chapter[];
-  /** total de líneas omitidas por la limpieza */
-  removedCount: number;
-  totalWords: number;
+  source: "pdf" | "epub" | "demo";
+  /** PDF y demo pasan por la cadena de limpieza. */
+  raw: RawLine[][] | null;
+  /** EPUB llega ya estructurado en párrafos. */
+  pages: PageBlock[] | null;
+  language?: string;
 }
-
-export interface Position {
-  page: number;
-  sentence: number;
-}
-
-export type SpeechStatus = "idle" | "playing" | "paused";

@@ -1,251 +1,184 @@
 import JSZip from "jszip";
-import type { Book, Chapter, Page } from "./types";
-import { paginateChapter, type SimpleChapter } from "./text";
+import type { Book, PageBlock } from "./types";
+import { uid } from "./book";
 
-function dirOf(path: string): string {
-  const i = path.lastIndexOf("/");
-  return i >= 0 ? path.slice(0, i + 1) : "";
-}
+const parse = (s: string, type: DOMParserSupportedType) =>
+  new DOMParser().parseFromString(s, type);
 
-function resolvePath(base: string, href: string): string {
-  const clean = href.split("#")[0];
-  if (clean.startsWith("/")) return clean.slice(1);
-  const stack = (base + clean).split("/");
+function resolvePath(p: string): string {
   const out: string[] = [];
-  for (const part of stack) {
-    if (part === "..") out.pop();
-    else if (part !== "." && part !== "") out.push(part);
+  for (const seg of decodeURIComponent(p).split("/")) {
+    if (!seg || seg === ".") continue;
+    if (seg === "..") out.pop();
+    else out.push(seg);
   }
   return out.join("/");
 }
 
-const NOTE_TYPE_RE = /(footnote|rearnote|endnote|^note$|annotation|bibliography|index|toc)/i;
-const NOTE_CLASS_RE = /(foot|end|rear)?[-_]?note|annotation|bibliograph/i;
+const NOISE_TOKENS =
+  /^(footnote|endnote|rearnote|marginal|annotation|pagebreak|pagenumber|page-number|toc|bibliography)$/i;
 
-/** Elimina nodos de notas, navegación e índices dentro de un capítulo XHTML. */
-function stripNotes(doc: Document): number {
-  let removed = 0;
-  const kill: Element[] = [];
+const NOISE_CLASS =
+  /(footnote|endnote|rearnote|notas?-?al-?pie|pie-?de-?pagina|pagenumber|page-number)/i;
 
-  doc.querySelectorAll("script, style, nav").forEach((el) => kill.push(el));
-
-  doc.querySelectorAll("*").forEach((el) => {
-    const type = el.getAttribute("epub:type") || el.getAttributeNS("http://www.idpf.org/2007/ops", "type") || "";
-    if (type && NOTE_TYPE_RE.test(type)) kill.push(el);
-    else if (el.tagName.toLowerCase() === "aside") kill.push(el);
-    else {
-      const cls = `${el.getAttribute("class") ?? ""} ${el.getAttribute("id") ?? ""}`;
-      if (NOTE_CLASS_RE.test(cls) && el.children.length < 40) kill.push(el);
-    }
-  });
-
-  // referencias inline: <a epub:type="noteref"> o enlaces a #nota con texto corto
-  doc.querySelectorAll("a").forEach((a) => {
-    const type = a.getAttribute("epub:type") ?? "";
-    const href = a.getAttribute("href") ?? "";
-    const txt = (a.textContent ?? "").trim();
-    const isRef =
-      /noteref/i.test(type) ||
-      (href.startsWith("#") && /^[\d*†‡¶ivxlcdma-z]{1,5}$/i.test(txt));
-    if (isRef) kill.push(a);
-  });
-
-  const seen = new Set<Element>();
-  for (const el of kill) {
-    if (seen.has(el)) continue;
-    let p: Element | null = el;
-    let nested = false;
-    while (p) {
-      if (seen.has(p)) {
-        nested = true;
-        break;
-      }
-      p = p.parentElement;
-    }
-    if (nested) continue;
-    seen.add(el);
-    const text = el.textContent?.trim();
-    if (text && text.length > 1 && el.tagName.toLowerCase() !== "a") removed++;
-    el.remove();
-  }
-  // <sup> que solo contenían números de nota
-  doc.querySelectorAll("sup").forEach((s) => {
-    const t = (s.textContent ?? "").trim();
-    if (/^[\d*†‡¶]{1,4}$/.test(t)) s.remove();
-  });
-  return removed;
-}
-
-function chapterFromXhtml(
-  html: string,
-  fallbackTitle: string
-): { chapter: SimpleChapter | null; isToc: boolean; removed: number } {
-  const doc = new DOMParser().parseFromString(html, "text/html");
-  const removed = stripNotes(doc);
-  const body = doc.body;
-  if (!body) return { chapter: null, isToc: false, removed };
-
-  // detección de índice: mayoría de los bloques son enlaces cortos
-  const anchors = body.querySelectorAll("a[href]").length;
-  const blocks = Array.from(
-    body.querySelectorAll("p, h1, h2, h3, h4, h5, h6, li, blockquote, dt, dd, pre")
-  );
-  const paras: { text: string; heading?: boolean }[] = [];
-  let title: string | null = null;
-
-  for (const el of blocks) {
-    let text = (el.textContent ?? "").replace(/\s+/g, " ").trim();
-    if (!text || /^\d{1,4}$/.test(text)) continue;
-    if (text.length > 4000) text = text.slice(0, 4000);
+/** Quita scripts, notas al pie tipográficas, índices y marcadores de página. */
+function stripNoise(doc: Document) {
+  doc.querySelectorAll("script, style, nav, svg, hr").forEach((el) => el.remove());
+  for (const el of [...doc.querySelectorAll("*")]) {
+    if (!el.isConnected) continue;
     const tag = el.tagName.toLowerCase();
-    const isH = /^h[1-6]$/.test(tag);
-    if (isH && !title && text.length < 90) title = text;
-    if (isH && text.length < 90) paras.push({ text, heading: true });
-    else paras.push({ text });
+    const etype =
+      el.getAttribute("epub:type") ||
+      el.getAttributeNS("http://www.idpf.org/2007/ops", "type") ||
+      "";
+    const cls = el.getAttribute("class") || "";
+    const idl = el.getAttribute("id") || "";
+
+    const typedNoise = /(footnote|endnote|rearnote|marginal|annotation|toc|pagebreak|pagenumber)/i.test(
+      etype
+    );
+    const classNoise =
+      cls.split(/\s+/).some((c) => NOISE_TOKENS.test(c)) || NOISE_CLASS.test(cls) ||
+      idl.split(/\s+/).some((c) => NOISE_TOKENS.test(c));
+
+    if (typedNoise || classNoise) {
+      el.remove();
+      continue;
+    }
+    /* referencia de nota: <a href="#fn12">12</a> o <sup>12</sup> */
+    if (tag === "a") {
+      const href = el.getAttribute("href") || "";
+      if (
+        (/^#(fn|note|sdfootnote|endnote)/i.test(href) ||
+          /ref/i.test(cls)) &&
+        (el.textContent || "").trim().length <= 6
+      ) {
+        el.remove();
+        continue;
+      }
+    }
+    if (tag === "sup" && /^[\s[(]?\d{1,3}[\])]?\s*$/.test(el.textContent || "")) {
+      el.remove();
+    }
   }
-
-  const shortBlocks = paras.filter((p) => p.text.length < 90).length;
-  const isToc =
-    paras.length >= 6 && anchors >= Math.max(5, shortBlocks * 0.6) && shortBlocks / Math.max(1, paras.length) > 0.7;
-
-  if (!paras.length) return { chapter: null, isToc, removed };
-  return {
-    chapter: { title: title ?? fallbackTitle, paragraphs: paras },
-    isToc,
-    removed,
-  };
 }
 
-export async function extractEpub(
+function extractParagraphs(doc: Document): string[] {
+  const body = doc.querySelector("body");
+  if (!body) return [];
+  const out: string[] = [];
+  const nodes = body.querySelectorAll("h1, h2, h3, h4, h5, h6, p, li");
+  nodes.forEach((n) => {
+    const t = (n.textContent || "").replace(/\s+/g, " ").trim();
+    if (t.length > 1) out.push(t);
+  });
+  if (out.length < 3) {
+    const t = (body.textContent || "").replace(/\s+/g, " ").trim();
+    if (t.length > 40) out.push(t);
+  }
+  return out;
+}
+
+const TOC_LINE = /(\.{2,}|…{1,})\s*\d+\s*$|^\d{1,3}\s*[.)]\s+\S/;
+
+function looksLikeToc(paras: string[]): boolean {
+  if (paras.length < 6) return false;
+  const avg = paras.reduce((a, p) => a + p.length, 0) / paras.length;
+  const hits = paras.filter((p) => TOC_LINE.test(p)).length;
+  return avg < 60 && hits / paras.length >= 0.45;
+}
+
+/** Lee un EPUB completo: metadatos, lomo (spine) y texto limpio por capítulos. */
+export async function loadEpubBook(
   file: File,
-  onProgress?: (frac: number) => void
+  onProgress?: (p: number) => void
 ): Promise<Book> {
-  const zip = await JSZip.loadAsync(await file.arrayBuffer());
-
-  const containerXml = await zip.file("META-INF/container.xml")?.async("string");
-  if (!containerXml) throw new Error("No es un EPUB válido (falta container.xml).");
-  // parseado como HTML para evitar problemas de namespaces XML en querySelector
-  const container = new DOMParser().parseFromString(containerXml, "text/html");
-  const rootfile = container.querySelector("rootfile")?.getAttribute("full-path");
-  if (!rootfile) throw new Error("No es un EPUB válido (sin rootfile).");
-
-  const opfText = await zip.file(rootfile)?.async("string");
-  if (!opfText) throw new Error("No es un EPUB válido (falta el OPF).");
-  const opf = new DOMParser().parseFromString(opfText, "text/html");
-  const base = dirOf(rootfile);
+  const zip = await JSZip.loadAsync(file);
+  const container = await zip.file("META-INF/container.xml")?.async("string");
+  if (!container) throw new Error("EPUB inválido: falta META-INF/container.xml.");
+  const cdoc = parse(container, "application/xml");
+  const opfPath = cdoc.querySelector("rootfile")?.getAttribute("full-path");
+  if (!opfPath) throw new Error("EPUB inválido: no se encontró el archivo OPF.");
+  const opfXml = await zip.file(resolvePath(opfPath))?.async("string");
+  if (!opfXml) throw new Error("EPUB inválido: no se pudo leer el OPF.");
+  const opf = parse(opfXml, "application/xml");
 
   const title =
-    opf.querySelector("metadata title, dc\\:title, title")?.textContent?.trim() ||
+    opf.getElementsByTagName("dc:title")[0]?.textContent?.trim() ||
     file.name.replace(/\.epub$/i, "");
   const author =
-    opf.querySelector("metadata creator, dc\\:creator, creator")?.textContent?.trim() ||
-    undefined;
+    opf.getElementsByTagName("dc:creator")[0]?.textContent?.trim() || undefined;
+  const language =
+    opf.getElementsByTagName("dc:language")[0]?.textContent?.trim() || undefined;
+
+  const base = opfPath.includes("/")
+    ? opfPath.slice(0, opfPath.lastIndexOf("/") + 1)
+    : "";
 
   const manifest = new Map<string, { href: string; type: string }>();
-  opf.querySelectorAll("manifest item").forEach((it) => {
-    const id = it.getAttribute("id");
-    const href = it.getAttribute("href");
-    if (id && href)
-      manifest.set(id, { href, type: it.getAttribute("media-type") ?? "" });
+  opf.querySelectorAll("manifest > item").forEach((el) => {
+    const id = el.getAttribute("id");
+    const href = el.getAttribute("href");
+    const type = el.getAttribute("media-type") || "";
+    if (id && href) manifest.set(id, { href, type });
   });
-  const spineIds = Array.from(opf.querySelectorAll("spine > itemref")).map((r) =>
-    r.getAttribute("idref")
-  );
 
-  const chapters: SimpleChapter[] = [];
-  const chapterMeta: { title: string; removed: number; toc: boolean }[] = [];
+  const spineIds = [...opf.querySelectorAll("spine > itemref")]
+    .filter((el) => el.getAttribute("linear") !== "no")
+    .map((el) => el.getAttribute("idref") || "")
+    .filter(Boolean);
+
+  const blocks: PageBlock[] = [];
   let done = 0;
+
   for (const id of spineIds) {
-    const item = id ? manifest.get(id) : undefined;
     done++;
-    if (!item || (!/xhtml|html/.test(item.type) && !/\.x?html?$/i.test(item.href))) {
+    const item = manifest.get(id);
+    if (!item || !/xhtml|html|xml/i.test(item.type)) {
       onProgress?.(done / spineIds.length);
       continue;
     }
-    const path = resolvePath(base, item.href);
-    const f = zip.file(path);
-    if (!f) continue;
-    const html = await f.async("string");
-    const { chapter, isToc, removed } = chapterFromXhtml(html, `Sección ${chapters.length + 1}`);
-    chapterMeta.push({ title: chapter?.title ?? "Índice", removed, toc: isToc });
-    if (chapter && !isToc) chapters.push(chapter);
+    const path = resolvePath(base + item.href);
+    if (/(^|\/)(toc|contents?|nav|indice|index)[^/]*$/i.test(path) && spineIds.length > 3) {
+      onProgress?.(done / spineIds.length);
+      continue;
+    }
+    const html = await zip.file(path)?.async("string");
+    if (!html) {
+      onProgress?.(done / spineIds.length);
+      continue;
+    }
+    const hdoc = parse(html, "application/xhtml+xml");
+    if (hdoc.querySelector("parsererror")) {
+      onProgress?.(done / spineIds.length);
+      continue;
+    }
+    stripNoise(hdoc);
+    const paras = extractParagraphs(hdoc);
+    if (!paras.length || looksLikeToc(paras)) {
+      onProgress?.(done / spineIds.length);
+      continue;
+    }
+
+    /* repagina el capítulo en páginas de ~1000 caracteres */
+    let cur: string[] = [];
+    let len = 0;
+    for (const p of paras) {
+      cur.push(p);
+      len += p.length;
+      if (len >= 1000) {
+        blocks.push({ paragraphs: cur });
+        cur = [];
+        len = 0;
+      }
+    }
+    if (cur.length) blocks.push({ paragraphs: cur });
     onProgress?.(done / spineIds.length);
   }
 
-  if (!chapters.length) throw new Error("No se encontró texto legible en el EPUB.");
-
-  // encabezados/pies repetidos entre capítulos (título del libro en cada página)
-  const freq = new Map<string, number>();
-  for (const ch of chapters)
-    for (const p of ch.paragraphs)
-      if (!p.heading && p.text.length <= 90) {
-        const k = p.text.toLowerCase().replace(/\s+/g, " ").trim();
-        freq.set(k, (freq.get(k) ?? 0) + 1);
-      }
-  const repTh = Math.max(3, Math.ceil(chapters.length * 0.6));
-  let removedRepeated = 0;
-  for (const ch of chapters) {
-    ch.paragraphs = ch.paragraphs.filter((p) => {
-      const k = p.text.toLowerCase().replace(/\s+/g, " ").trim();
-      const rep = !p.heading && p.text.length <= 90 && (freq.get(k) ?? 0) >= repTh;
-      if (rep) removedRepeated++;
-      return !rep;
-    });
+  if (!blocks.length) {
+    throw new Error("No se pudo extraer texto legible de este EPUB.");
   }
 
-  const pages: Page[] = [];
-  const bookChapters: Chapter[] = [];
-  chapters.forEach((ch, ci) => {
-    const removedLines: string[] = [];
-    const meta = chapterMeta[ci];
-    if (meta && meta.removed > 0)
-      removedLines.push(`${meta.removed} nota(s) o sección(es) omitida(s)`);
-    const chPages = paginateChapter(ch, ci, removedLines);
-    bookChapters.push({
-      title: ch.title,
-      startPage: pages.length,
-      endPage: pages.length + Math.max(0, chPages.length - 1),
-    });
-    pages.push(...chPages);
-  });
-
-  const tocRemoved = chapterMeta.filter((m) => m.toc).length;
-  const removedCount =
-    pages.reduce((a, p) => a + p.removed.length, 0) + removedRepeated + tocRemoved;
-  const totalWords = pages.reduce((a, p) => a + p.words, 0);
-
-  return {
-    title,
-    author,
-    source: "epub",
-    fileName: file.name,
-    pages,
-    chapters: bookChapters,
-    removedCount,
-    totalWords,
-  };
-}
-
-/** Documento TXT plano: párrafos por doble salto de línea. */
-export async function extractTxt(file: File): Promise<Book> {
-  const text = await file.text();
-  const paras = text
-    .split(/\n{2,}/)
-    .map((t) => ({ text: t.replace(/\s+/g, " ").trim() }))
-    .filter((p) => p.text.length > 0);
-  if (!paras.length) throw new Error("El archivo de texto está vacío.");
-  const chapter: SimpleChapter = {
-    title: file.name.replace(/\.txt$/i, ""),
-    paragraphs: paras,
-  };
-  const pages = paginateChapter(chapter, 0);
-  return {
-    title: chapter.title,
-    source: "txt",
-    fileName: file.name,
-    pages,
-    chapters: [{ title: chapter.title, startPage: 0, endPage: Math.max(0, pages.length - 1) }],
-    removedCount: 0,
-    totalWords: pages.reduce((a, p) => a + p.words, 0),
-  };
+  return { id: uid(), title, author, language, source: "epub", raw: null, pages: blocks };
 }

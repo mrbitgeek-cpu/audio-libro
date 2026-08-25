@@ -1,308 +1,216 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Book, Position, SpeechStatus } from "../lib/types";
+import type { Sentence } from "../lib/types";
 
-const LS_RATE = "vozpagina.rate";
-const LS_VOICE = "vozpagina.voice";
-const LS_AUTO = "vozpagina.autoadvance";
+export type SpeechStatus = "idle" | "playing" | "paused";
 
-function loadVoices(): SpeechSynthesisVoice[] {
-  if (typeof speechSynthesis === "undefined") return [];
-  const all = speechSynthesis.getVoices();
-  const es = all.filter((v) => v.lang.toLowerCase().startsWith("es"));
-  const rest = all.filter((v) => !v.lang.toLowerCase().startsWith("es"));
-  const score = (v: SpeechSynthesisVoice) => {
-    let s = 0;
-    if (/google/i.test(v.name)) s += 4;
-    if (/m[óo]nica|paulina|helena|luciana|sabina|elvira|esperanza|isabela/i.test(v.name)) s += 2;
-    if (v.localService) s += 1;
-    return s;
-  };
-  es.sort((a, b) => score(b) - score(a));
-  return [...es, ...rest];
-}
-
-export interface SpeechEngine {
-  supported: boolean;
-  status: SpeechStatus;
-  pos: Position;
-  voices: SpeechSynthesisVoice[];
-  voiceURI: string | null;
-  setVoiceURI: (uri: string | null) => void;
-  rate: number;
-  setRate: (r: number) => void;
-  autoAdvance: boolean;
-  setAutoAdvance: (v: boolean) => void;
-  play: (from?: Position) => void;
-  pause: () => void;
-  resume: () => void;
-  toggle: () => void;
-  stop: () => void;
-  seekPage: (page: number) => void;
-  seekSentence: (page: number, sentence: number) => void;
-  atEnd: boolean;
-}
-
-export function useSpeech(book: Book | null, onAutoTurn?: (page: number) => void): SpeechEngine {
-  const supported = typeof window !== "undefined" && "speechSynthesis" in window;
-
-  const [status, setStatus] = useState<SpeechStatus>("idle");
-  const [pos, setPos] = useState<Position>({ page: 0, sentence: 0 });
-  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>(loadVoices);
-  const [voiceURI, setVoiceURIState] = useState<string | null>(
-    () => localStorage.getItem(LS_VOICE) ?? null
-  );
-  const [rate, setRateState] = useState<number>(() => {
-    const r = parseFloat(localStorage.getItem(LS_RATE) ?? "1");
-    return Number.isFinite(r) && r >= 0.5 && r <= 2 ? r : 1;
+function usePersist<T>(key: string, init: T) {
+  const [v, setV] = useState<T>(() => {
+    try {
+      const s = localStorage.getItem(key);
+      return s != null ? (JSON.parse(s) as T) : init;
+    } catch {
+      return init;
+    }
   });
-  const [autoAdvance, setAutoAdvanceState] = useState<boolean>(
-    () => localStorage.getItem(LS_AUTO) !== "0"
+  useEffect(() => {
+    try {
+      localStorage.setItem(key, JSON.stringify(v));
+    } catch {
+      /* sin almacenamiento */
+    }
+  }, [key, v]);
+  return [v, setV] as const;
+}
+
+function pickDefaultVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
+  if (!voices.length) return null;
+  const es = voices.filter((v) => v.lang.toLowerCase().startsWith("es"));
+  const pool = es.length ? es : voices;
+  const preferred = pool.find(
+    (v) => /google|mónica|monica|paulina|sabina|helena|lucia|lucía|elvira/i.test(v.name)
   );
+  return preferred || pool.find((v) => v.default) || pool[0];
+}
 
-  const bookRef = useRef(book);
-  const posRef = useRef<Position>({ page: 0, sentence: 0 });
-  const statusRef = useRef<SpeechStatus>("idle");
-  const runIdRef = useRef(0);
-  const rateRef = useRef(rate);
-  const voiceRef = useRef(voices);
-  const autoRef = useRef(autoAdvance);
-  const onAutoTurnRef = useRef(onAutoTurn);
-  const timerRef = useRef<number | undefined>(undefined);
+/**
+ * Motor de lectura en voz alta: habla frase a frase, informa del índice actual
+ * (para pasar páginas y resaltar) y permite pausar, detener y saltar.
+ */
+export function useSpeech(sentences: Sentence[], onIndex: (i: number) => void) {
+  const [status, setStatus] = useState<SpeechStatus>("idle");
+  const [index, setIndex] = useState(-1);
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [voiceURI, setVoiceURI] = usePersist<string>("vozalta.voice", "");
+  const [rate, setRate] = usePersist<number>("vozalta.rate", 1);
+  const [pitch, setPitch] = usePersist<number>("vozalta.pitch", 1);
 
-  bookRef.current = book;
-  rateRef.current = rate;
-  voiceRef.current = voices;
-  autoRef.current = autoAdvance;
-  onAutoTurnRef.current = onAutoTurn;
+  const sessionRef = useRef(0);
+  const idxRef = useRef(-1);
+  const sentencesRef = useRef(sentences);
+  const onIndexRef = useRef(onIndex);
+  sentencesRef.current = sentences;
+  onIndexRef.current = onIndex;
 
-  // reinicio al cambiar de libro
+  /* voces disponibles (se cargan en diferido en muchos navegadores) */
   useEffect(() => {
-    window.clearTimeout(timerRef.current);
-    if (typeof speechSynthesis !== "undefined") speechSynthesis.cancel();
-    runIdRef.current += 1;
-    posRef.current = { page: 0, sentence: 0 };
-    setPos({ page: 0, sentence: 0 });
-    setStatus("idle");
-    statusRef.current = "idle";
-  }, [book]);
-
-  useEffect(() => {
-    if (!supported) return;
-    const update = () => setVoices(loadVoices());
-    update();
-    speechSynthesis.addEventListener("voiceschanged", update);
+    if (typeof speechSynthesis === "undefined") return;
+    const load = () => setVoices(speechSynthesis.getVoices());
+    load();
+    speechSynthesis.addEventListener("voiceschanged", load);
     return () => {
-      speechSynthesis.removeEventListener("voiceschanged", update);
+      speechSynthesis.removeEventListener("voiceschanged", load);
       speechSynthesis.cancel();
     };
-  }, [supported]);
+  }, []);
 
-  const setStatusBoth = (s: SpeechStatus) => {
-    statusRef.current = s;
-    setStatus(s);
-  };
+  /* si cambia el libro, se acabó la sesión anterior */
+  useEffect(() => {
+    sessionRef.current++;
+    if (typeof speechSynthesis !== "undefined") speechSynthesis.cancel();
+    idxRef.current = -1;
+    setIndex(-1);
+    setStatus("idle");
+  }, [sentences]);
 
-  const speakCurrent = useCallback(
-    (runId: number) => {
-      const b = bookRef.current;
-      if (!b || runId !== runIdRef.current) return;
-      const { page, sentence } = posRef.current;
-      const pg = b.pages[page];
-      if (!pg) {
-        setStatusBoth("idle");
-        return;
-      }
-      if (sentence >= pg.sentences.length) {
-        // fin de página → pase automático o pausa
-        const next = page + 1;
-        if (autoRef.current && next < b.pages.length) {
-          posRef.current = { page: next, sentence: 0 };
-          setPos(posRef.current);
-          onAutoTurnRef.current?.(next);
-          timerRef.current = window.setTimeout(() => speakCurrent(runId), 700);
+  const speakAt = useCallback(
+    (from: number) => {
+      if (typeof speechSynthesis === "undefined") return;
+      const list = sentencesRef.current;
+      if (!list.length) return;
+      const synth = speechSynthesis;
+      synth.cancel();
+      const session = ++sessionRef.current;
+
+      const step = (j: number) => {
+        if (sessionRef.current !== session) return;
+        if (j >= list.length || j < 0) {
+          idxRef.current = -1;
+          setIndex(-1);
+          setStatus("idle");
+          return;
+        }
+        idxRef.current = j;
+        setIndex(j);
+        onIndexRef.current(j);
+
+        const u = new SpeechSynthesisUtterance(list[j].text);
+        const all = synth.getVoices();
+        const v =
+          all.find((x) => x.voiceURI === voiceURI) || pickDefaultVoice(all);
+        if (v) {
+          u.voice = v;
+          u.lang = v.lang;
         } else {
-          setStatusBoth("idle");
+          u.lang = "es-ES";
         }
-        return;
-      }
-      setPos({ page, sentence });
-      const u = new SpeechSynthesisUtterance(pg.sentences[sentence]);
-      const v = voiceRef.current.find((x) => x.voiceURI === (localStorage.getItem(LS_VOICE) ?? ""));
-      const picked = v ?? voiceRef.current[0];
-      if (picked) {
-        u.voice = picked;
-        u.lang = picked.lang;
-      } else {
-        u.lang = "es-ES";
-      }
-      u.rate = rateRef.current;
-      u.pitch = 1;
-      u.onend = () => {
-        if (runId !== runIdRef.current) return;
-        posRef.current = { page, sentence: sentence + 1 };
-        speakCurrent(runId);
+        u.rate = rate;
+        u.pitch = pitch;
+        u.onend = () => step(j + 1);
+        u.onerror = (e) => {
+          if (e.error === "interrupted" || e.error === "canceled") return;
+          step(j + 1);
+        };
+        synth.speak(u);
       };
-      u.onerror = (e) => {
-        if (runId !== runIdRef.current) return;
-        if (e.error === "interrupted" || e.error === "canceled") return;
-        posRef.current = { page, sentence: sentence + 1 };
-        speakCurrent(runId);
-      };
-      window.speechSynthesis.speak(u);
-    },
-    []
-  );
 
-  const cancelChain = () => {
-    runIdRef.current += 1;
-    window.clearTimeout(timerRef.current);
-    if (supported) window.speechSynthesis.cancel();
-  };
-
-  const play = useCallback(
-    (from?: Position) => {
-      if (!bookRef.current || !supported) return;
-      cancelChain();
-      const runId = runIdRef.current;
-      const start: Position =
-        from ??
-        (posRef.current.page >= bookRef.current.pages.length
-          ? { page: 0, sentence: 0 }
-          : posRef.current);
-      // si estaba al final de la página actual, avanza
-      const pg = bookRef.current.pages[start.page];
-      if (pg && start.sentence >= pg.sentences.length) {
-        if (start.page + 1 < bookRef.current.pages.length) {
-          start.page += 1;
-          start.sentence = 0;
-        } else if (statusRef.current === "idle") {
-          // terminó el libro: reproducir de nuevo desde el inicio
-          start.page = 0;
-          start.sentence = 0;
-        }
-      }
-      posRef.current = { ...start };
-      setPos(posRef.current);
-      setStatusBoth("playing");
-      speakCurrent(runId);
+      setStatus("playing");
+      step(from);
     },
-    [supported, speakCurrent]
+    [voiceURI, rate, pitch]
   );
 
   const pause = useCallback(() => {
-    if (!supported || statusRef.current !== "playing") return;
-    window.speechSynthesis.pause();
-    setStatusBoth("paused");
-  }, [supported]);
+    if (typeof speechSynthesis === "undefined") return;
+    speechSynthesis.pause();
+    setStatus("paused");
+  }, []);
 
   const resume = useCallback(() => {
-    if (!supported || statusRef.current !== "paused") return;
-    window.speechSynthesis.resume();
-    setStatusBoth("playing");
-    // vigilancia: en algunos navegadores resume() no reanuda
-    const runId = runIdRef.current;
-    window.setTimeout(() => {
-      if (
-        runId === runIdRef.current &&
-        statusRef.current === "playing" &&
-        supported &&
-        window.speechSynthesis.paused
-      ) {
-        cancelChain();
-        const id = runIdRef.current;
-        setStatusBoth("playing");
-        speakCurrent(id);
-      }
-    }, 350);
-  }, [supported, speakCurrent]);
-
-  const toggle = useCallback(() => {
-    if (statusRef.current === "playing") pause();
-    else if (statusRef.current === "paused") resume();
-    else play();
-  }, [pause, resume, play]);
+    if (typeof speechSynthesis === "undefined") return;
+    if (speechSynthesis.paused) {
+      speechSynthesis.resume();
+      /* algunos navegadores se quedan dormidos: si no arranca, reintentamos */
+      window.setTimeout(() => {
+        if (speechSynthesis.paused) {
+          speechSynthesis.resume();
+        }
+      }, 250);
+    }
+    setStatus("playing");
+  }, []);
 
   const stop = useCallback(() => {
-    cancelChain();
-    posRef.current = { ...posRef.current, sentence: 0 };
-    setPos(posRef.current);
-    setStatusBoth("idle");
+    sessionRef.current++;
+    if (typeof speechSynthesis !== "undefined") speechSynthesis.cancel();
+    setStatus("idle");
   }, []);
 
-  const seekPage = useCallback(
-    (page: number) => {
-      const b = bookRef.current;
-      if (!b) return;
-      const p = Math.max(0, Math.min(page, b.pages.length - 1));
-      cancelChain();
-      posRef.current = { page: p, sentence: 0 };
-      setPos(posRef.current);
-      if (statusRef.current === "playing") speakCurrent(runIdRef.current);
+  const toggle = useCallback(() => {
+    if (status === "playing") pause();
+    else if (status === "paused") resume();
+    else speakAt(idxRef.current >= 0 ? idxRef.current : 0);
+  }, [status, pause, resume, speakAt]);
+
+  const seek = useCallback(
+    (i: number) => {
+      const n = sentencesRef.current.length;
+      if (!n) return;
+      const clamped = Math.max(0, Math.min(n - 1, i));
+      if (statusRef() !== "idle") speakAt(clamped);
+      else {
+        idxRef.current = clamped;
+        setIndex(clamped);
+        onIndexRef.current(clamped);
+      }
     },
-    [speakCurrent]
+    [speakAt]
   );
 
-  const seekSentence = useCallback(
-    (page: number, sentence: number) => {
-      const b = bookRef.current;
-      if (!b || !b.pages[page]) return;
-      cancelChain();
-      posRef.current = { page, sentence };
-      setPos(posRef.current);
-      setStatusBoth("playing");
-      speakCurrent(runIdRef.current);
+  const statusRefFn = useRef(status);
+  statusRefFn.current = status;
+  function statusRef() {
+    return statusRefFn.current;
+  }
+
+  const previewVoice = useCallback(
+    (text: string) => {
+      if (typeof speechSynthesis === "undefined") return;
+      const synth = speechSynthesis;
+      synth.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      const all = synth.getVoices();
+      const v = all.find((x) => x.voiceURI === voiceURI) || pickDefaultVoice(all);
+      if (v) {
+        u.voice = v;
+        u.lang = v.lang;
+      } else {
+        u.lang = "es-ES";
+      }
+      u.rate = rate;
+      u.pitch = pitch;
+      synth.speak(u);
     },
-    [speakCurrent]
+    [voiceURI, rate, pitch]
   );
-
-  const setRate = useCallback((r: number) => {
-    const clamped = Math.max(0.5, Math.min(2, r));
-    setRateState(clamped);
-    localStorage.setItem(LS_RATE, String(clamped));
-  }, []);
-
-  const setVoiceURI = useCallback((uri: string | null) => {
-    setVoiceURIState(uri);
-    if (uri) localStorage.setItem(LS_VOICE, uri);
-    else localStorage.removeItem(LS_VOICE);
-    // reinicia la frase actual con la nueva voz si está hablando
-    if (statusRef.current === "playing") {
-      cancelChain();
-      const id = runIdRef.current;
-      setStatusBoth("playing");
-      window.setTimeout(() => speakCurrent(id), 30);
-    }
-  }, [speakCurrent]);
-
-  const setAutoAdvance = useCallback((v: boolean) => {
-    setAutoAdvanceState(v);
-    localStorage.setItem(LS_AUTO, v ? "1" : "0");
-  }, []);
-
-  const b = book;
-  const atEnd =
-    !!b &&
-    pos.page === b.pages.length - 1 &&
-    pos.sentence >= (b.pages[pos.page]?.sentences.length ?? 0);
 
   return {
-    supported,
     status,
-    pos,
+    index,
     voices,
     voiceURI,
     setVoiceURI,
     rate,
     setRate,
-    autoAdvance,
-    setAutoAdvance,
-    play,
+    pitch,
+    setPitch,
+    speakAt,
     pause,
     resume,
-    toggle,
     stop,
-    seekPage,
-    seekSentence,
-    atEnd,
+    toggle,
+    seek,
+    previewVoice,
   };
 }
+
+export type SpeechEngine = ReturnType<typeof useSpeech>;
