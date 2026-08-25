@@ -248,6 +248,65 @@ export default function Sidebar({
             <IcGauge className="h-4 w-4" />
             Probar esta voz
           </button>
+
+          {/* diagnóstico de sonido */}
+          <div className="mt-4 rounded-lg border border-pine-800 bg-pine-900/70 px-3 py-3">
+            <div className="flex items-center justify-between">
+              <p className="font-display text-[10.5px] font-bold uppercase tracking-[0.14em] text-moss">
+                Diagnóstico de sonido
+              </p>
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  speech.voices.length ? "bg-teal-400" : "bg-gold-500"
+                }`}
+                title={speech.voices.length ? "Voces detectadas" : "Sin voces todavía"}
+              />
+            </div>
+
+            <dl className="mt-2 space-y-1 text-[11px] leading-snug">
+              <div className="flex justify-between gap-2">
+                <dt className="text-moss">Voces del sistema</dt>
+                <dd className="font-display font-bold text-fern">{speech.voices.length}</dd>
+              </div>
+              <div className="flex justify-between gap-2">
+                <dt className="text-moss">Motor hablando</dt>
+                <dd className={`font-display font-bold ${speech.diag.speaking ? "text-teal-300" : "text-fern/60"}`}>
+                  {speech.diag.speaking ? "sí" : "no"}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-2">
+                <dt className="text-moss">En cola / pausa</dt>
+                <dd className="font-display font-bold text-fern/80">
+                  {speech.diag.pending ? "cola" : speech.diag.paused ? "pausa" : "—"}
+                </dd>
+              </div>
+            </dl>
+
+            {speech.lastError && (
+              <p className="mt-2 rounded bg-[#3b2118] px-2 py-1.5 text-[10.5px] font-medium text-[#f0b39e]">
+                Último error: {speech.lastError}
+              </p>
+            )}
+
+            {speech.voices.length === 0 && (
+              <p className="mt-2 rounded bg-gold-400/10 px-2 py-1.5 text-[10.5px] leading-snug text-gold-300">
+                Tu navegador aún no expone voces. Pulsa «Probar esta voz»: a veces el primer
+                gesto las desbloquea.
+              </p>
+            )}
+
+            <button
+              onClick={speech.beep}
+              className="mt-2.5 w-full rounded-md bg-pine-800 px-3 py-1.5 font-display text-[11px] font-semibold text-moss transition-all hover:bg-pine-700 hover:text-fern active:scale-[0.98]"
+              title="Emite un tono con WebAudio, sin usar la síntesis de voz"
+            >
+              Bip de prueba (audio puro)
+            </button>
+            <p className="mt-1.5 text-[10px] leading-snug text-moss/80">
+              ¿Suena el bip pero no la voz? Es un problema de voces del sistema. ¿Ni el bip?
+              Es el volumen del sistema o la pestaña silenciada.
+            </p>
+          </div>
         </div>
       </div>
 

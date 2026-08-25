@@ -54,6 +54,14 @@ export function useSpeech(sentences: Sentence[], onIndex: (i: number) => void) {
   const [rate, setRate] = usePersist<number>("vozalta.rate", 1);
   const [pitch, setPitch] = usePersist<number>("vozalta.pitch", 1);
 
+  /* diagnóstico en vivo del motor (para el panel de sonido) */
+  const [lastError, setLastError] = useState<string | null>(null);
+  const [diag, setDiag] = useState({
+    speaking: false,
+    pending: false,
+    paused: false,
+  });
+
   const sessionRef = useRef(0);
   const idxRef = useRef(-1);
   const rescueRef = useRef(0);
@@ -118,6 +126,7 @@ export function useSpeech(sentences: Sentence[], onIndex: (i: number) => void) {
 
       const session = ++sessionRef.current;
       rescueRef.current = 0;
+      setLastError(null);
 
       const step = (j: number) => {
         if (sessionRef.current !== session) return;
@@ -157,6 +166,7 @@ export function useSpeech(sentences: Sentence[], onIndex: (i: number) => void) {
           if (sessionRef.current !== session) return;
           /* interrupted/canceled: se encarga el watchdog; el resto, salta la frase */
           if (e.error === "interrupted" || e.error === "canceled") return;
+          setLastError(e.error || "error desconocido");
           advance();
         };
         synth.speak(u);
@@ -177,11 +187,18 @@ export function useSpeech(sentences: Sentence[], onIndex: (i: number) => void) {
     if (typeof speechSynthesis === "undefined") return;
     let silentTicks = 0;
     const iv = window.setInterval(() => {
+      const synth = speechSynthesis;
+      setDiag((d) =>
+        d.speaking === synth.speaking &&
+        d.pending === synth.pending &&
+        d.paused === synth.paused
+          ? d
+          : { speaking: synth.speaking, pending: synth.pending, paused: synth.paused }
+      );
       if (statusRef.current !== "playing") {
         silentTicks = 0;
         return;
       }
-      const synth = speechSynthesis;
       if (synth.speaking || synth.pending) {
         silentTicks = 0;
         rescueRef.current = 0;
@@ -317,10 +334,46 @@ export function useSpeech(sentences: Sentence[], onIndex: (i: number) => void) {
       }
       u.rate = rate;
       u.pitch = pitch;
+      u.onend = () => setLastError(null);
+      u.onerror = (e) => {
+        if (e.error !== "interrupted" && e.error !== "canceled") {
+          setLastError(e.error || "error desconocido");
+        }
+      };
       window.setTimeout(() => synth.speak(u), 130);
     },
     [voiceURI, rate, pitch]
   );
+
+  /**
+   * Prueba de sonido puro con WebAudio (esquiva la síntesis de voz).
+   * Si esto suena y la voz no, el problema es de las voces del sistema;
+   * si esto tampoco suena, es el volumen del sistema o la pestaña silenciada.
+   */
+  const beep = useCallback(() => {
+    try {
+      const Ctx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!Ctx) return;
+      const ctx = new Ctx();
+      void ctx.resume();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = 880;
+      const t = ctx.currentTime;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.35, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.55);
+      osc.onended = () => void ctx.close();
+    } catch {
+      /* sin audio */
+    }
+  }, []);
 
   return {
     status,
@@ -339,6 +392,9 @@ export function useSpeech(sentences: Sentence[], onIndex: (i: number) => void) {
     toggle,
     seek,
     previewVoice,
+    beep,
+    lastError,
+    diag,
   };
 }
 
