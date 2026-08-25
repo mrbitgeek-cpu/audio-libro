@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Book, FilterOpts } from "./lib/types";
 import { buildBook } from "./lib/book";
-import { loadPdfBook } from "./lib/pdf";
-import { loadEpubBook } from "./lib/epub";
 import { makeDemoBook } from "./lib/demo";
 import { useSpeech } from "./hooks/useSpeech";
 import Landing from "./components/Landing";
@@ -87,9 +85,16 @@ export default function App() {
         setParsing({ name: f.name, progress: 0 });
         let book: Book;
         if (ext === "pdf") {
-          book = await loadPdfBook(f, (p) => setParsing({ name: f.name, progress: p * 0.9 }));
+          /* el parser de PDF se carga bajo demanda para aligerar el arranque */
+          const { loadPdfBook } = await import("./lib/pdf");
+          book = await loadPdfBook(f, (p: number) =>
+            setParsing({ name: f.name, progress: p * 0.9 })
+          );
         } else if (ext === "epub") {
-          book = await loadEpubBook(f, (p) => setParsing({ name: f.name, progress: p * 0.9 }));
+          const { loadEpubBook } = await import("./lib/epub");
+          book = await loadEpubBook(f, (p: number) =>
+            setParsing({ name: f.name, progress: p * 0.9 })
+          );
         } else {
           setError(`«${f.name}»: formato no compatible. Usa PDF o EPUB.`);
           continue;

@@ -79,6 +79,12 @@ export function useSpeech(sentences: Sentence[], onIndex: (i: number) => void) {
       if (!list.length) return;
       const synth = speechSynthesis;
       synth.cancel();
+      /* Chrome a veces deja la cola «congelada» tras cancelar */
+      try {
+        synth.resume();
+      } catch {
+        /* sin efecto */
+      }
       const session = ++sessionRef.current;
 
       const step = (j: number) => {
