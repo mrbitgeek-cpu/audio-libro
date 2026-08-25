@@ -27,14 +27,24 @@ function pickDefaultVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice 
   const es = voices.filter((v) => v.lang.toLowerCase().startsWith("es"));
   const pool = es.length ? es : voices;
   const preferred = pool.find(
-    (v) => /google|mónica|monica|paulina|sabina|helena|lucia|lucía|elvira/i.test(v.name)
+    (v) => /google|mónica|monica|paulina|sabina|helena|lucia|lucía|elvira|monica|jorge/i.test(v.name)
   );
   return preferred || pool.find((v) => v.default) || pool[0];
 }
 
+const isIOS =
+  typeof navigator !== "undefined" &&
+  (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1));
+
 /**
- * Motor de lectura en voz alta: habla frase a frase, informa del índice actual
- * (para pasar páginas y resaltar) y permite pausar, detener y saltar.
+ * Motor de lectura en voz alta frase a frase, endurecido contra los fallos
+ * clásicos de los navegadores:
+ *  - Chrome congela la cola tras cancel()  → retraso + resume() + watchdog.
+ *  - Chrome recolecta la utterance activa  → referencia viva permanente.
+ *  - Chrome/Safari pierden onend           → el watchdog re-lanza la frase.
+ *  - iOS corta el habla a los ~15 s        → latido de pausa/resume (solo iOS).
+ *  - La pestaña pierde el foco             → resume automático al volver.
  */
 export function useSpeech(sentences: Sentence[], onIndex: (i: number) => void) {
   const [status, setStatus] = useState<SpeechStatus>("idle");
@@ -46,13 +56,19 @@ export function useSpeech(sentences: Sentence[], onIndex: (i: number) => void) {
 
   const sessionRef = useRef(0);
   const idxRef = useRef(-1);
+  const rescueRef = useRef(0);
+  /* referencia viva: sin esto Chrome puede recolectar la utterance a mitad de frase */
+  const liveUtt = useRef<SpeechSynthesisUtterance | null>(null);
   const sentencesRef = useRef(sentences);
   const onIndexRef = useRef(onIndex);
   sentencesRef.current = sentences;
   onIndexRef.current = onIndex;
 
-  /* voces disponibles: Safari/iOS las carga en diferido, a veces solo tras un
-     gesto del usuario, así que reintentamos durante unos segundos */
+  const statusRef = useRef(status);
+  statusRef.current = status;
+  const speakAtRef = useRef<(from: number) => void>(() => {});
+
+  /* voces disponibles: Safari las entrega tarde, a veces solo tras un gesto */
   useEffect(() => {
     if (typeof speechSynthesis === "undefined") return;
     const load = () => {
@@ -65,7 +81,7 @@ export function useSpeech(sentences: Sentence[], onIndex: (i: number) => void) {
     let tries = 0;
     const iv = window.setInterval(() => {
       tries++;
-      if (load() || tries > 20) window.clearInterval(iv);
+      if (load() || tries > 25) window.clearInterval(iv);
     }, 400);
     return () => {
       window.clearInterval(iv);
@@ -77,6 +93,7 @@ export function useSpeech(sentences: Sentence[], onIndex: (i: number) => void) {
   /* si cambia el libro, se acabó la sesión anterior */
   useEffect(() => {
     sessionRef.current++;
+    liveUtt.current = null;
     if (typeof speechSynthesis !== "undefined") speechSynthesis.cancel();
     idxRef.current = -1;
     setIndex(-1);
@@ -89,18 +106,23 @@ export function useSpeech(sentences: Sentence[], onIndex: (i: number) => void) {
       const list = sentencesRef.current;
       if (!list.length) return;
       const synth = speechSynthesis;
+
       synth.cancel();
-      /* Chrome a veces deja la cola «congelada» tras cancelar */
+      /* despierta el motor: Chrome a veces deja la cola congelada */
       try {
         synth.resume();
       } catch {
         /* sin efecto */
       }
+      synth.getVoices();
+
       const session = ++sessionRef.current;
+      rescueRef.current = 0;
 
       const step = (j: number) => {
         if (sessionRef.current !== session) return;
-        if (j >= list.length || j < 0) {
+        if (j < 0 || j >= list.length) {
+          liveUtt.current = null;
           idxRef.current = -1;
           setIndex(-1);
           setStatus("idle");
@@ -111,9 +133,10 @@ export function useSpeech(sentences: Sentence[], onIndex: (i: number) => void) {
         onIndexRef.current(j);
 
         const u = new SpeechSynthesisUtterance(list[j].text);
+        liveUtt.current = u; /* ancla anti-recolección */
+
         const all = synth.getVoices();
-        const v =
-          all.find((x) => x.voiceURI === voiceURI) || pickDefaultVoice(all);
+        const v = all.find((x) => x.voiceURI === voiceURI) || pickDefaultVoice(all);
         if (v) {
           u.voice = v;
           u.lang = v.lang;
@@ -122,20 +145,104 @@ export function useSpeech(sentences: Sentence[], onIndex: (i: number) => void) {
         }
         u.rate = rate;
         u.pitch = pitch;
-        u.onend = () => step(j + 1);
-        u.onerror = (e) => {
-          if (e.error === "interrupted" || e.error === "canceled") return;
+
+        let settled = false;
+        const advance = () => {
+          if (settled) return;
+          settled = true;
           step(j + 1);
+        };
+        u.onend = advance;
+        u.onerror = (e) => {
+          if (sessionRef.current !== session) return;
+          /* interrupted/canceled: se encarga el watchdog; el resto, salta la frase */
+          if (e.error === "interrupted" || e.error === "canceled") return;
+          advance();
         };
         synth.speak(u);
       };
 
       setStatus("playing");
-      /* iOS ignora el speak() si llega en el mismo tick que el cancel() */
-      window.setTimeout(() => step(from), 90);
+      /* iOS y Chrome descartan el speak() si llega en el mismo tick que cancel() */
+      window.setTimeout(() => {
+        if (sessionRef.current === session) step(from);
+      }, 130);
     },
     [voiceURI, rate, pitch]
   );
+  speakAtRef.current = speakAt;
+
+  /* ---------- watchdog: si decimos que suena pero el motor calla, rescate ---------- */
+  useEffect(() => {
+    if (typeof speechSynthesis === "undefined") return;
+    let silentTicks = 0;
+    const iv = window.setInterval(() => {
+      if (statusRef.current !== "playing") {
+        silentTicks = 0;
+        return;
+      }
+      const synth = speechSynthesis;
+      if (synth.speaking || synth.pending) {
+        silentTicks = 0;
+        rescueRef.current = 0;
+        return;
+      }
+      /* dos avisos seguidos (~2,4 s) de silencio injustificado */
+      silentTicks++;
+      if (silentTicks < 2) return;
+      silentTicks = 0;
+      rescueRef.current++;
+      if (rescueRef.current > 5) {
+        /* el motor no responde: rendimos la sesión para no bloquear la app */
+        sessionRef.current++;
+        liveUtt.current = null;
+        setStatus("idle");
+        return;
+      }
+      try {
+        synth.resume();
+      } catch {
+        /* sin efecto */
+      }
+      speakAtRef.current(idxRef.current >= 0 ? idxRef.current : 0);
+    }, 1200);
+    return () => window.clearInterval(iv);
+  }, []);
+
+  /* ---------- latido anti-corte de iOS (allí el habla muere a los ~15 s) ---------- */
+  useEffect(() => {
+    if (!isIOS || typeof speechSynthesis === "undefined" || status !== "playing") return;
+    const iv = window.setInterval(() => {
+      const synth = speechSynthesis;
+      if (!synth.speaking && !synth.pending) return;
+      try {
+        synth.pause();
+        synth.resume();
+      } catch {
+        /* sin efecto */
+      }
+    }, 10_000);
+    return () => window.clearInterval(iv);
+  }, [status]);
+
+  /* ---------- al volver del segundo plano, retomamos la voz ---------- */
+  useEffect(() => {
+    if (typeof speechSynthesis === "undefined") return;
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      if (statusRef.current === "playing") {
+        window.setTimeout(() => {
+          try {
+            speechSynthesis.resume();
+          } catch {
+            /* sin efecto */
+          }
+        }, 300);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
 
   const pause = useCallback(() => {
     if (typeof speechSynthesis === "undefined") return;
@@ -147,10 +254,13 @@ export function useSpeech(sentences: Sentence[], onIndex: (i: number) => void) {
     if (typeof speechSynthesis === "undefined") return;
     if (speechSynthesis.paused) {
       speechSynthesis.resume();
-      /* algunos navegadores se quedan dormidos: si no arranca, reintentamos */
       window.setTimeout(() => {
         if (speechSynthesis.paused) {
-          speechSynthesis.resume();
+          try {
+            speechSynthesis.resume();
+          } catch {
+            /* sin efecto */
+          }
         }
       }, 250);
     }
@@ -159,32 +269,10 @@ export function useSpeech(sentences: Sentence[], onIndex: (i: number) => void) {
 
   const stop = useCallback(() => {
     sessionRef.current++;
+    liveUtt.current = null;
     if (typeof speechSynthesis !== "undefined") speechSynthesis.cancel();
     setStatus("idle");
   }, []);
-
-  /* Safari en iPhone corta el audio a los ~15 s: un ciclo pause/resume cada
-     10 s lo mantiene vivo; y si la pestaña vuelve al primer plano, reanudamos */
-  useEffect(() => {
-    if (typeof speechSynthesis === "undefined" || status !== "playing") return;
-    const iv = window.setInterval(() => {
-      const s = speechSynthesis;
-      if (s.speaking && !s.paused) {
-        s.pause();
-        s.resume();
-      }
-    }, 10_000);
-    const onVis = () => {
-      if (document.visibilityState === "visible" && speechSynthesis.paused) {
-        speechSynthesis.resume();
-      }
-    };
-    document.addEventListener("visibilitychange", onVis);
-    return () => {
-      window.clearInterval(iv);
-      document.removeEventListener("visibilitychange", onVis);
-    };
-  }, [status]);
 
   const toggle = useCallback(() => {
     if (status === "playing") pause();
@@ -197,7 +285,7 @@ export function useSpeech(sentences: Sentence[], onIndex: (i: number) => void) {
       const n = sentencesRef.current.length;
       if (!n) return;
       const clamped = Math.max(0, Math.min(n - 1, i));
-      if (statusRef() !== "idle") speakAt(clamped);
+      if (statusRef.current !== "idle") speakAt(clamped);
       else {
         idxRef.current = clamped;
         setIndex(clamped);
@@ -207,18 +295,18 @@ export function useSpeech(sentences: Sentence[], onIndex: (i: number) => void) {
     [speakAt]
   );
 
-  const statusRefFn = useRef(status);
-  statusRefFn.current = status;
-  function statusRef() {
-    return statusRefFn.current;
-  }
-
   const previewVoice = useCallback(
     (text: string) => {
       if (typeof speechSynthesis === "undefined") return;
       const synth = speechSynthesis;
       synth.cancel();
+      try {
+        synth.resume();
+      } catch {
+        /* sin efecto */
+      }
       const u = new SpeechSynthesisUtterance(text);
+      liveUtt.current = u;
       const all = synth.getVoices();
       const v = all.find((x) => x.voiceURI === voiceURI) || pickDefaultVoice(all);
       if (v) {
@@ -229,7 +317,7 @@ export function useSpeech(sentences: Sentence[], onIndex: (i: number) => void) {
       }
       u.rate = rate;
       u.pitch = pitch;
-      synth.speak(u);
+      window.setTimeout(() => synth.speak(u), 130);
     },
     [voiceURI, rate, pitch]
   );
