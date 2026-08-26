@@ -162,6 +162,35 @@ kbd {
   animation: pulse-ring 1.8s ease-out infinite;
 }
 
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(0.94);
+  }
+}
+.pulse-soft {
+  animation: pulse-soft 1.6s ease-in-out infinite;
+}
+
+@keyframes banner-in {
+  from {
+    opacity: 0;
+    transform: translateY(-14px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.banner-in {
+  animation: banner-in 0.4s cubic-bezier(0.22, 0.9, 0.3, 1) both;
+}
+
 /* ecualizador del reproductor */
 .eq span {
   display: block;
@@ -269,6 +298,8 @@ input[type="range"]::-moz-range-thumb {
   .pop-in,
   .slide-in,
   .pulse-ring,
+  .pulse-soft,
+  .banner-in,
   .marquee-track,
   .eq span {
     animation: none !important;

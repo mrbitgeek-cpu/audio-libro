@@ -3,6 +3,13 @@ import type { Book, FilterOpts } from "./lib/types";
 import { buildBook } from "./lib/book";
 import { makeDemoBook } from "./lib/demo";
 import { makePasteBook } from "./lib/paste";
+import {
+  deleteBookRecord,
+  loadAllBooks,
+  loadSession,
+  saveBook,
+  saveSession,
+} from "./lib/store";
 import { useSpeech } from "./hooks/useSpeech";
 import Landing from "./components/Landing";
 import Sidebar from "./components/Sidebar";
@@ -12,7 +19,7 @@ import PasteModal from "./components/PasteModal";
 import ShareButton from "./components/ShareButton";
 import Studio from "./components/Studio";
 import { Switch } from "./components/ui";
-import { IcAlert, IcEye, IcMenu, IcMic, IcPen, IcPlus, IcX } from "./components/icons";
+import { IcAlert, IcEye, IcLogo, IcMenu, IcMic, IcPen, IcPlus, IcRotate, IcX } from "./components/icons";
 
 const EMPTY_SENTENCES: never[] = [];
 
@@ -38,9 +45,18 @@ export default function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [pasteOpen, setPasteOpen] = useState(false);
   const [view, setView] = useState<"read" | "studio">("read");
+  /* hidratación: hasta no cargar la biblioteca guardada no pintamos nada definitivo */
+  const [hydrated, setHydrated] = useState(false);
+  /* banner «retomando donde lo dejaste» */
+  const [resumed, setResumed] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const viewRef = useRef(view);
   viewRef.current = view;
+  /* punto de lectura pendiente de restaurar tras hidratar */
+  const pendingPageRef = useRef<number | null>(null);
+  const pendingSentenceRef = useRef<number | null>(null);
+  /* última frase leída (para reanudar el audio desde ahí) */
+  const sentenceIdxRef = useRef(0);
 
   /* persistencia ligera */
   useEffect(() => {
@@ -54,6 +70,39 @@ export default function App() {
     } catch { /* sin almacenamiento */ }
   }, [follow]);
 
+  /* ---------- hidratación: recuperar biblioteca y sesión al abrir ---------- */
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [storedBooks, session] = await Promise.all([loadAllBooks(), loadSession()]);
+        if (cancelled) return;
+        setBooks(storedBooks);
+        const restored = storedBooks.find((b) => b.id === session.activeId);
+        if (restored) {
+          setActiveId(restored.id);
+          pendingPageRef.current = session.pageIdx;
+          pendingSentenceRef.current = session.sentenceIdx;
+          setResumed(restored.title);
+        }
+      } catch {
+        /* almacenamiento no disponible: arrancamos de cero */
+      } finally {
+        if (!cancelled) setHydrated(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /* el banner de «retomando» se disipa solo */
+  useEffect(() => {
+    if (!resumed) return;
+    const t = window.setTimeout(() => setResumed(null), 4200);
+    return () => window.clearTimeout(t);
+  }, [resumed]);
+
   const active = books.find((b) => b.id === activeId) ?? null;
   const built = useMemo(
     () => (active ? buildBook(active, filters) : null),
@@ -62,8 +111,9 @@ export default function App() {
   const builtRef = useRef(built);
   builtRef.current = built;
 
-  /* la voz cambia de página sola */
+  /* la voz cambia de página sola (y recuerda la frase para poder reanudar) */
   const handleIndex = useCallback((i: number) => {
+    sentenceIdxRef.current = i;
     const b = builtRef.current;
     const s = b?.sentences[i];
     if (s) setPageIdx(s.page);
@@ -71,12 +121,32 @@ export default function App() {
 
   const speech = useSpeech(built?.sentences ?? EMPTY_SENTENCES, handleIndex);
 
-  /* al cambiar de libro o de filtros, reinicia la sesión de audio */
+  /* al cambiar de libro o de filtros, reinicia el audio… salvo que estemos
+     restaurando la sesión guardada, en cuyo caso volvemos al punto exacto */
   useEffect(() => {
     speech.stop();
-    setPageIdx(0);
+    if (pendingPageRef.current != null) {
+      const last = Math.max(0, (built?.pages.length ?? 1) - 1);
+      setPageIdx(Math.min(pendingPageRef.current, last));
+      pendingPageRef.current = null;
+    } else {
+      setPageIdx(0);
+    }
+    if (pendingSentenceRef.current != null && built) {
+      const target = pendingSentenceRef.current;
+      pendingSentenceRef.current = null;
+      /* se difiere un tick para que el motor de voz ya tenga las frases nuevas */
+      window.setTimeout(() => speech.seek(target), 0);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [built]);
+
+  /* guarda la sesión (libro, página y frase) para retomarla al volver */
+  useEffect(() => {
+    if (!hydrated) return;
+    const sentenceIdx = speech.index >= 0 ? speech.index : sentenceIdxRef.current;
+    saveSession({ activeId, pageIdx, sentenceIdx });
+  }, [activeId, pageIdx, speech.index, hydrated]);
 
   /* aviso temporal */
   useEffect(() => {
@@ -110,6 +180,7 @@ export default function App() {
         setParsing({ name: f.name, progress: 1 });
         setBooks((bs) => [...bs, book]);
         setActiveId(book.id);
+        void saveBook(book);
       } catch (e) {
         setError(e instanceof Error ? e.message : `No se pudo abrir «${f.name}».`);
       } finally {
@@ -122,6 +193,7 @@ export default function App() {
     const demo = makeDemoBook();
     setBooks((bs) => [...bs, demo]);
     setActiveId(demo.id);
+    void saveBook(demo);
   }, []);
 
   const addPaste = useCallback((title: string, text: string) => {
@@ -130,6 +202,7 @@ export default function App() {
       setBooks((bs) => [...bs, book]);
       setActiveId(book.id);
       setPasteOpen(false);
+      void saveBook(book);
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo leer ese texto.");
     }
@@ -139,6 +212,7 @@ export default function App() {
     (id: string) => {
       const remaining = books.filter((b) => b.id !== id);
       setBooks(remaining);
+      void deleteBookRecord(id);
       if (id === activeId) {
         speech.stop();
         setActiveId(remaining[0]?.id ?? null);
@@ -233,6 +307,22 @@ export default function App() {
   goToPageRef.current = goToPage;
 
   /* ---------- pantallas ---------- */
+
+  /* mientras se recupera la biblioteca guardada, una espera breve y cuidada */
+  if (!hydrated) {
+    return (
+      <div className="app-bg grid h-dvh place-items-center text-ink">
+        <div className="pop-in flex flex-col items-center gap-4">
+          <span className="grid h-16 w-16 place-items-center rounded-2xl bg-pine-950 text-gold-400 shadow-xl">
+            <IcLogo className="pulse-soft h-9 w-9" />
+          </span>
+          <p className="font-display text-lg font-bold tracking-tight">Vozalta</p>
+          <p className="font-body text-sm italic text-ink-soft">Recuperando tu biblioteca…</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!active || !built) {
     if (view === "studio") {
       return <Studio onBack={() => setView("read")} />;
@@ -372,6 +462,17 @@ export default function App() {
             <span className="hidden sm:inline">Libro</span>
           </button>
         </header>
+
+        {resumed && (
+          <div className="pointer-events-none absolute inset-x-0 top-[64px] z-30 flex justify-center px-4">
+            <div className="banner-in pointer-events-auto flex items-center gap-2.5 rounded-full border border-gold-400/60 bg-pine-950 px-4 py-2 shadow-xl shadow-pine-950/25">
+              <IcRotate className="h-4 w-4 shrink-0 text-gold-400" />
+              <p className="font-body text-[13px] text-fern">
+                Retomando <span className="font-semibold text-gold-300">«{resumed}»</span> donde lo dejaste
+              </p>
+            </div>
+          </div>
+        )}
 
         <Reader
           book={active}
