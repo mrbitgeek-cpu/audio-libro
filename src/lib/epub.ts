@@ -6,8 +6,14 @@ const parse = (s: string, type: DOMParserSupportedType) =>
   new DOMParser().parseFromString(s, type);
 
 function resolvePath(p: string): string {
+  let decoded = p;
+  try {
+    decoded = decodeURIComponent(p);
+  } catch {
+    /* nombre con % malformado: se usa tal cual */
+  }
   const out: string[] = [];
-  for (const seg of decodeURIComponent(p).split("/")) {
+  for (const seg of decoded.split("/")) {
     if (!seg || seg === ".") continue;
     if (seg === "..") out.pop();
     else out.push(seg);
@@ -88,6 +94,38 @@ function looksLikeToc(paras: string[]): boolean {
   return avg < 60 && hits / paras.length >= 0.45;
 }
 
+/**
+ * Parsea un documento de contenido de forma indulgente.
+ * `text/html` recupera el XHTML ligeramente malformado que el parser estricto
+ * de iOS rechaza (la causa típica del mensaje «sin texto legible»).
+ */
+function parseContent(s: string): Document {
+  return new DOMParser().parseFromString(s, "text/html");
+}
+
+function isContent(item: { href: string; type: string }): boolean {
+  if (/xhtml|html/i.test(item.type)) return true;
+  return /\.(xhtml|html?|htm)$/i.test(item.href);
+}
+
+const TOC_PATH = /(^|\/)(toc|contents?|nav|indice|index)[^/]*$/i;
+
+/** Convierte los párrafos de un capítulo en páginas de ~1000 caracteres. */
+function repaginate(paras: string[], into: PageBlock[]) {
+  let cur: string[] = [];
+  let len = 0;
+  for (const p of paras) {
+    cur.push(p);
+    len += p.length;
+    if (len >= 1000) {
+      into.push({ paragraphs: cur });
+      cur = [];
+      len = 0;
+    }
+  }
+  if (cur.length) into.push({ paragraphs: cur });
+}
+
 /** Lee un EPUB completo: metadatos, lomo (spine) y texto limpio por capítulos. */
 export async function loadEpubBook(
   file: File,
@@ -129,51 +167,40 @@ export async function loadEpubBook(
     .filter(Boolean);
 
   const blocks: PageBlock[] = [];
-  let done = 0;
+  const seen = new Set<string>();
 
+  /* procesa un archivo de contenido; devuelve true si aportó texto */
+  const consume = async (item: { href: string; type: string }): Promise<boolean> => {
+    const path = resolvePath(base + item.href);
+    if (seen.has(path)) return false;
+    seen.add(path);
+    const raw = await zip.file(path)?.async("string");
+    if (!raw) return false;
+    const doc = parseContent(raw);
+    stripNoise(doc);
+    const paras = extractParagraphs(doc);
+    if (!paras.length) return false;
+    /* solo descartamos como índice si el nombre del archivo Y el contenido lo delatan */
+    if (TOC_PATH.test(path) && looksLikeToc(paras)) return false;
+    repaginate(paras, blocks);
+    return true;
+  };
+
+  let done = 0;
   for (const id of spineIds) {
     done++;
     const item = manifest.get(id);
-    if (!item || !/xhtml|html|xml/i.test(item.type)) {
-      onProgress?.(done / spineIds.length);
-      continue;
-    }
-    const path = resolvePath(base + item.href);
-    if (/(^|\/)(toc|contents?|nav|indice|index)[^/]*$/i.test(path) && spineIds.length > 3) {
-      onProgress?.(done / spineIds.length);
-      continue;
-    }
-    const html = await zip.file(path)?.async("string");
-    if (!html) {
-      onProgress?.(done / spineIds.length);
-      continue;
-    }
-    const hdoc = parse(html, "application/xhtml+xml");
-    if (hdoc.querySelector("parsererror")) {
-      onProgress?.(done / spineIds.length);
-      continue;
-    }
-    stripNoise(hdoc);
-    const paras = extractParagraphs(hdoc);
-    if (!paras.length || looksLikeToc(paras)) {
-      onProgress?.(done / spineIds.length);
-      continue;
-    }
+    if (item && isContent(item)) await consume(item);
+    onProgress?.(spineIds.length ? done / spineIds.length : 1);
+  }
 
-    /* repagina el capítulo en páginas de ~1000 caracteres */
-    let cur: string[] = [];
-    let len = 0;
-    for (const p of paras) {
-      cur.push(p);
-      len += p.length;
-      if (len >= 1000) {
-        blocks.push({ paragraphs: cur });
-        cur = [];
-        len = 0;
-      }
+  /* respaldo: si el lomo no aportó nada, recorre los archivos de contenido del manifiesto */
+  if (!blocks.length) {
+    const items = [...manifest.values()].filter(isContent);
+    for (let i = 0; i < items.length; i++) {
+      await consume(items[i]);
+      onProgress?.(items.length ? (i + 1) / items.length : 1);
     }
-    if (cur.length) blocks.push({ paragraphs: cur });
-    onProgress?.(done / spineIds.length);
   }
 
   if (!blocks.length) {
