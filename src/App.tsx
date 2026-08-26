@@ -9,6 +9,7 @@ import Sidebar from "./components/Sidebar";
 import Reader from "./components/Reader";
 import PlayerBar from "./components/PlayerBar";
 import PasteModal from "./components/PasteModal";
+import ShareButton from "./components/ShareButton";
 import Studio from "./components/Studio";
 import { Switch } from "./components/ui";
 import { IcAlert, IcEye, IcMenu, IcMic, IcPen, IcPlus, IcX } from "./components/icons";
@@ -340,7 +341,9 @@ export default function App() {
             <Switch on={follow} onChange={setFollow} label="Seguir lectura" />
           </label>
 
-          <span className="rounded-full border border-line bg-paper px-3 py-1 font-display text-[12px] font-bold tabular-nums text-pine-800">
+          <ShareButton compact />
+
+          <span className="hidden rounded-full border border-line bg-paper px-3 py-1 font-display text-[12px] font-bold tabular-nums text-pine-800 sm:block">
             {pageIdx + 1} / {built.pages.length}
           </span>
 

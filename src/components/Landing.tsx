@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import ShareButton from "./ShareButton";
 import {
   IcArrowR,
   IcAsterisk,
@@ -57,10 +58,13 @@ export default function Landing({ onFiles, onDemo, onPaste, onOpenStudio }: Prop
             <p className="font-body text-[12px] italic text-ink-soft">el lector que escucha</p>
           </div>
         </div>
-        <span className="hidden items-center gap-2 rounded-full border border-line bg-card px-3.5 py-1.5 font-display text-[12px] font-semibold text-teal-600 sm:flex">
-          <IcShield className="h-4 w-4" />
-          100% local · tus archivos no se suben
-        </span>
+        <div className="flex items-center gap-2.5">
+          <span className="hidden items-center gap-2 rounded-full border border-line bg-card px-3.5 py-1.5 font-display text-[12px] font-semibold text-teal-600 md:flex">
+            <IcShield className="h-4 w-4" />
+            100% local · tus archivos no se suben
+          </span>
+          <ShareButton />
+        </div>
       </header>
 
       {/* cuerpo */}

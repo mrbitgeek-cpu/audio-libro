@@ -223,6 +223,15 @@ export const IcPen = (p: P) => (
   </svg>
 );
 
+export const IcShare = (p: P) => (
+  <svg {...base} {...p}>
+    <circle cx="6" cy="12" r="2.6" />
+    <circle cx="17.5" cy="5.5" r="2.6" />
+    <circle cx="17.5" cy="18.5" r="2.6" />
+    <path d="m8.4 10.8 6.8-4M8.4 13.2l6.8 4" />
+  </svg>
+);
+
 export const IcShield = (p: P) => (
   <svg {...base} {...p}>
     <path d="M12 3.5 5 6v5.6c0 4.4 2.9 7.4 7 8.9 4.1-1.5 7-4.5 7-8.9V6l-7-2.5Z" />
