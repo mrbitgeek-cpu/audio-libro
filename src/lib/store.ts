@@ -108,3 +108,59 @@ export function saveSession(s: SessionState): void {
     /* sin almacenamiento */
   }
 }
+
+/* ---------- marcadores manuales (por libro) ---------- */
+export type BookmarkMap = Record<string, number[]>;
+
+const BOOKMARKS_KEY = "vozalta.bookmarks";
+
+export function loadBookmarks(): BookmarkMap {
+  try {
+    const s = localStorage.getItem(BOOKMARKS_KEY);
+    if (!s) return {};
+    const p = JSON.parse(s) as Record<string, unknown>;
+    const out: BookmarkMap = {};
+    for (const [k, v] of Object.entries(p)) {
+      if (Array.isArray(v)) out[k] = v.filter((n): n is number => typeof n === "number" && n >= 0);
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+export function saveBookmarks(m: BookmarkMap): void {
+  try {
+    localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(m));
+  } catch {
+    /* sin almacenamiento */
+  }
+}
+
+/* ---------- última lectura (por libro, se actualiza sola) ---------- */
+export type LastReadMap = Record<string, number>;
+
+const LASTREAD_KEY = "vozalta.lastread";
+
+export function loadLastRead(): LastReadMap {
+  try {
+    const s = localStorage.getItem(LASTREAD_KEY);
+    if (!s) return {};
+    const p = JSON.parse(s) as Record<string, unknown>;
+    const out: LastReadMap = {};
+    for (const [k, v] of Object.entries(p)) {
+      if (typeof v === "number" && v >= 0) out[k] = v;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+export function saveLastRead(m: LastReadMap): void {
+  try {
+    localStorage.setItem(LASTREAD_KEY, JSON.stringify(m));
+  } catch {
+    /* sin almacenamiento */
+  }
+}

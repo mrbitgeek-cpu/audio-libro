@@ -6,8 +6,12 @@ import { makePasteBook } from "./lib/paste";
 import {
   deleteBookRecord,
   loadAllBooks,
+  loadBookmarks,
+  loadLastRead,
   loadSession,
   saveBook,
+  saveBookmarks,
+  saveLastRead,
   saveSession,
 } from "./lib/store";
 import { useSpeech } from "./hooks/useSpeech";
@@ -57,6 +61,9 @@ export default function App() {
   const pendingSentenceRef = useRef<number | null>(null);
   /* última frase leída (para reanudar el audio desde ahí) */
   const sentenceIdxRef = useRef(0);
+  /* marcadores manuales y última lectura, por libro */
+  const [bookmarksByBook, setBookmarksByBook] = useState(loadBookmarks);
+  const [lastRead, setLastRead] = useState(loadLastRead);
 
   /* persistencia ligera */
   useEffect(() => {
@@ -111,6 +118,14 @@ export default function App() {
   const builtRef = useRef(built);
   builtRef.current = built;
 
+  /* marcadores del libro activo y página donde se dejó la lectura */
+  const bookmarkPages = activeId ? bookmarksByBook[activeId] ?? [] : [];
+  const isBookmarked = bookmarkPages.includes(pageIdx);
+  const resumePage =
+    activeId && lastRead[activeId] != null && lastRead[activeId] !== pageIdx && lastRead[activeId] > 0
+      ? lastRead[activeId]
+      : null;
+
   /* la voz cambia de página sola (y recuerda la frase para poder reanudar) */
   const handleIndex = useCallback((i: number) => {
     sentenceIdxRef.current = i;
@@ -147,6 +162,37 @@ export default function App() {
     const sentenceIdx = speech.index >= 0 ? speech.index : sentenceIdxRef.current;
     saveSession({ activeId, pageIdx, sentenceIdx });
   }, [activeId, pageIdx, speech.index, hydrated]);
+
+  /* persiste marcadores y última lectura */
+  useEffect(() => {
+    saveBookmarks(bookmarksByBook);
+  }, [bookmarksByBook]);
+  useEffect(() => {
+    saveLastRead(lastRead);
+  }, [lastRead]);
+
+  /* marcador automático de última lectura: recuerda la página de cada libro
+     (no pisa una posición guardada con un 0 al cambiar de libro) */
+  useEffect(() => {
+    if (!hydrated || !activeId) return;
+    setLastRead((m) => {
+      const prev = m[activeId];
+      if (pageIdx > 0 || prev === undefined) return { ...m, [activeId]: pageIdx };
+      return m;
+    });
+  }, [activeId, pageIdx, hydrated]);
+
+  /* marca/desmarca la página actual (también con Ctrl/Cmd+B) */
+  const toggleBookmark = useCallback(() => {
+    if (!activeId) return;
+    setBookmarksByBook((m) => {
+      const cur = m[activeId] ?? [];
+      const next = cur.includes(pageIdx)
+        ? cur.filter((p) => p !== pageIdx)
+        : [...cur, pageIdx].sort((a, b) => a - b);
+      return { ...m, [activeId]: next };
+    });
+  }, [activeId, pageIdx]);
 
   /* aviso temporal */
   useEffect(() => {
@@ -278,6 +324,11 @@ export default function App() {
       /* el estudio gestiona su propio teclado */
       if (viewRef.current === "studio") return;
       if (!builtRef.current) return;
+      if ((e.ctrlKey || e.metaKey) && (e.key === "b" || e.key === "B")) {
+        e.preventDefault();
+        toggleBookmarkRef.current();
+        return;
+      }
       if (e.code === "Space") {
         e.preventDefault();
         handleToggle();
@@ -303,6 +354,8 @@ export default function App() {
   speechRef.current = speech;
   const pageRef = useRef(pageIdx);
   pageRef.current = pageIdx;
+  const toggleBookmarkRef = useRef(toggleBookmark);
+  toggleBookmarkRef.current = toggleBookmark;
   const goToPageRef = useRef(goToPage);
   goToPageRef.current = goToPage;
 
@@ -356,6 +409,8 @@ export default function App() {
           onRemove={removeBook}
           onAdd={() => fileRef.current?.click()}
           onPaste={() => setPasteOpen(true)}
+          bookmarkPages={bookmarkPages}
+          onGoToPage={goToPage}
           speech={speech}
         />
       </aside>
@@ -379,6 +434,11 @@ export default function App() {
               onAdd={() => fileRef.current?.click()}
               onPaste={() => {
                 setPasteOpen(true);
+                setMenuOpen(false);
+              }}
+              bookmarkPages={bookmarkPages}
+              onGoToPage={(p) => {
+                goToPage(p);
                 setMenuOpen(false);
               }}
               speech={speech}
@@ -483,9 +543,21 @@ export default function App() {
           onSeekSentence={seekSentence}
           status={speech.status}
           follow={follow}
+          isBookmarked={isBookmarked}
+          onToggleBookmark={toggleBookmark}
+          resumePage={resumePage}
+          onResume={() => resumePage != null && goToPage(resumePage)}
         />
 
-            <PlayerBar speech={speech} built={built} pageIdx={pageIdx} onToggle={handleToggle} />
+            <PlayerBar
+              speech={speech}
+              built={built}
+              pageIdx={pageIdx}
+              onToggle={handleToggle}
+              onGoToPage={goToPage}
+              bookmarkPages={bookmarkPages}
+              lastReadPage={activeId ? lastRead[activeId] ?? null : null}
+            />
           </>
         )}
       </main>

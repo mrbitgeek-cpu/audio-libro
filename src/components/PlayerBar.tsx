@@ -15,6 +15,9 @@ interface Props {
   built: BuiltBook;
   pageIdx: number;
   onToggle: () => void;
+  onGoToPage: (p: number) => void;
+  bookmarkPages: number[];
+  lastReadPage: number | null;
 }
 
 const RATES = [0.8, 1, 1.25, 1.5];
@@ -26,7 +29,7 @@ function fmt(s: number) {
   return `${m}:${ss.toString().padStart(2, "0")}`;
 }
 
-export default function PlayerBar({ speech, built, pageIdx, onToggle }: Props) {
+export default function PlayerBar({ speech, built, pageIdx, onToggle, onGoToPage, bookmarkPages, lastReadPage }: Props) {
   const { status, index } = speech;
   const total = built.sentences.length;
   const current = index >= 0 && index < total ? built.sentences[index] : null;
@@ -66,6 +69,15 @@ export default function PlayerBar({ speech, built, pageIdx, onToggle }: Props) {
   const pct = total ? Math.round(((index + 1) / total) * 100) : 0;
   const playing = status === "playing";
 
+  /* posición (en %) de una página sobre la barra de progreso */
+  const pageToPct = (p: number): number | null => {
+    if (!total) return null;
+    const first = built.sentences.findIndex((s) => s.page === p);
+    if (first >= 0) return (first / total) * 100;
+    /* página sin frases (vacía): estima por proporción de páginas */
+    return built.pages.length > 1 ? (p / built.pages.length) * 100 : null;
+  };
+
   return (
     <div className="relative z-20 border-t border-pine-800 bg-pine-950 text-fern shadow-[0_-10px_30px_rgba(10,20,17,0.25)]">
       {/* barra de progreso */}
@@ -83,6 +95,47 @@ export default function PlayerBar({ speech, built, pageIdx, onToggle }: Props) {
         >
           <span className="absolute -right-1.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 rounded-full bg-gold-300 opacity-0 shadow transition-opacity group-hover:opacity-100" />
         </div>
+
+        {/* marcadores sobre la barra (clic = saltar a esa página) */}
+        {bookmarkPages.map((p) => {
+          const x = pageToPct(p);
+          if (x == null) return null;
+          return (
+            <button
+              key={`bm-${p}`}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onGoToPage(p);
+              }}
+              title={`Marcador · ir a pág. ${p + 1}`}
+              aria-label={`Ir al marcador de la página ${p + 1}`}
+              className="group/bm absolute top-1/2 -translate-x-1/2 -translate-y-1/2 px-1.5 py-1"
+              style={{ left: `${x}%` }}
+            >
+              <span className="block h-[15px] w-[3px] rounded-full bg-teal-300 shadow-[0_0_6px_rgba(94,234,212,0.8)] transition-transform group-hover/bm:scale-y-125" />
+            </button>
+          );
+        })}
+        {lastReadPage != null && !bookmarkPages.includes(lastReadPage) && (() => {
+          const x = pageToPct(lastReadPage);
+          if (x == null) return null;
+          return (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onGoToPage(lastReadPage);
+              }}
+              title={`Última lectura · ir a pág. ${lastReadPage + 1}`}
+              aria-label={`Ir a la última lectura, página ${lastReadPage + 1}`}
+              className="group/lr absolute top-1/2 -translate-x-1/2 -translate-y-1/2 px-1.5 py-1"
+              style={{ left: `${x}%` }}
+            >
+              <span className="block h-[15px] w-[3px] rounded-full bg-gold-400 shadow-[0_0_6px_rgba(236,189,79,0.9)] transition-transform group-hover/lr:scale-y-125" />
+            </button>
+          );
+        })()}
       </div>
 
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-4 py-2.5 md:px-5">

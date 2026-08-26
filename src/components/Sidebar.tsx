@@ -3,6 +3,7 @@ import type { SpeechEngine } from "../hooks/useSpeech";
 import { SectionTitle, SourceBadge, Switch } from "./ui";
 import {
   IcAsterisk,
+  IcBookmark,
   IcFunnel,
   IcGauge,
   IcHash,
@@ -25,6 +26,8 @@ interface Props {
   onRemove: (id: string) => void;
   onAdd: () => void;
   onPaste: () => void;
+  bookmarkPages: number[];
+  onGoToPage: (p: number) => void;
   speech: SpeechEngine;
 }
 
@@ -49,6 +52,8 @@ export default function Sidebar({
   onRemove,
   onAdd,
   onPaste,
+  bookmarkPages,
+  onGoToPage,
   speech,
 }: Props) {
   const esVoices = speech.voices.filter((v) => v.lang.toLowerCase().startsWith("es"));
@@ -185,6 +190,35 @@ export default function Sidebar({
                 </p>
               )}
             </>
+          )}
+        </div>
+
+        {/* marcadores */}
+        <div className="mt-1 border-t border-pine-800 px-5 py-5">
+          <div className="flex items-center gap-2">
+            <IcBookmark className="h-4 w-4 text-teal-300" />
+            <SectionTitle>Marcadores</SectionTitle>
+          </div>
+          {bookmarkPages.length === 0 ? (
+            <p className="mt-3 rounded-lg bg-pine-900 px-3 py-2.5 text-[12px] leading-relaxed text-moss">
+              Sin marcadores en este libro. Pulsa el icono del libro o{" "}
+              <kbd className="rounded bg-pine-800 px-1 font-display text-[10px] text-teal-300">Ctrl+B</kbd>{" "}
+              para guardar la página actual.
+            </p>
+          ) : (
+            <ul className="mt-3 flex flex-wrap gap-2">
+              {bookmarkPages.map((p) => (
+                <li key={p}>
+                  <button
+                    onClick={() => onGoToPage(p)}
+                    className="rounded-full border border-teal-600/50 bg-teal-600/10 px-3 py-1.5 font-display text-[12px] font-bold text-teal-300 transition-all hover:border-teal-500 hover:bg-teal-600/25 hover:text-fern active:scale-95"
+                    title={`Ir a la página ${p + 1}`}
+                  >
+                    pág. {p + 1}
+                  </button>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
 
